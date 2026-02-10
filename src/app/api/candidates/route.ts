@@ -1,25 +1,5 @@
 import { NextResponse } from 'next/server';
-
-export interface Candidate {
-  id: string;
-  firstName: string;
-  lastName: string;
-  displayName: string;
-  email: string;
-  phoneNumber: string;
-  jobId: number | null;
-  jobTitle: string;
-  status: string;
-  appliedDate: string;
-  source: string;
-  answers: { question: string; answer: string }[];
-}
-
-export interface JobOpening {
-  id: number;
-  title: string;
-  candidateCount: number;
-}
+import { Candidate, JobOpening } from '@/types/candidates';
 
 const BAMBOO_API_KEY = process.env.BAMBOO_API_KEY;
 const BAMBOO_SUBDOMAIN = process.env.BAMBOO_SUBDOMAIN;
@@ -126,6 +106,7 @@ export async function GET() {
       jobId: app.job?.id || null,
       jobTitle: app.job?.title?.label || '',
       status: app.status?.label || 'Unknown',
+      statusId: app.status?.id ?? null,
       appliedDate: app.appliedDate || '',
       source: app.applicant?.source || '',
       answers: [], // Questions require individual API calls - will implement on-demand

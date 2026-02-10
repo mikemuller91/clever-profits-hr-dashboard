@@ -1,58 +1,7 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
-
-interface Candidate {
-  id: string;
-  firstName: string;
-  lastName: string;
-  displayName: string;
-  email: string;
-  phoneNumber: string;
-  jobId: number | null;
-  jobTitle: string;
-  status: string;
-  appliedDate: string;
-  source: string;
-  answers: { question: string; answer: string }[];
-}
-
-interface CandidateDetail {
-  id: string;
-  firstName: string;
-  lastName: string;
-  displayName: string;
-  email: string;
-  phoneNumber: string;
-  jobId: number | null;
-  jobTitle: string;
-  status: string;
-  statusChangedDate: string;
-  appliedDate: string;
-  source: string;
-  linkedinUrl: string;
-  websiteUrl: string;
-  address: {
-    line1: string;
-    city: string;
-    state: string;
-    zipcode: string;
-    country: string;
-  } | null;
-  availableStartDate: string;
-  desiredSalary: string;
-  referredBy: string;
-  resumeFileId: number | null;
-  coverLetterFileId: number | null;
-  questionsAndAnswers: { question: string; answer: string }[];
-  hiringLead: { name: string; employeeId: number } | null;
-}
-
-interface JobOpening {
-  id: number;
-  title: string;
-  candidateCount: number;
-}
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { Candidate, CandidateDetail, JobOpening, CandidateStatus } from '@/types/candidates';
 
 export default function CandidatesDashboard() {
   const [candidates, setCandidates] = useState<Candidate[]>([]);
@@ -67,6 +16,38 @@ export default function CandidatesDashboard() {
   const [loadingDetails, setLoadingDetails] = useState<string | null>(null);
   const [sortColumn, setSortColumn] = useState<keyof Candidate>('appliedDate');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  const [availableStatuses, setAvailableStatuses] = useState<CandidateStatus[]>([]);
+  const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
+  const [statusDropdownOpen, setStatusDropdownOpen] = useState<string | null>(null);
+  const [statusError, setStatusError] = useState<string | null>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setStatusDropdownOpen(null);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Fetch available statuses on mount
+  useEffect(() => {
+    async function loadStatuses() {
+      try {
+        const response = await fetch('/api/candidates/statuses');
+        const data = await response.json();
+        if (response.ok && data.statuses) {
+          setAvailableStatuses(data.statuses);
+        }
+      } catch (err) {
+        console.error('Error fetching statuses:', err);
+      }
+    }
+    loadStatuses();
+  }, []);
 
   useEffect(() => {
     async function loadCandidates() {
@@ -191,6 +172,49 @@ export default function CandidatesDashboard() {
     }
   };
 
+  const handleStatusChange = async (candidateId: string, newStatusId: number, newStatusName: string) => {
+    setUpdatingStatus(candidateId);
+    setStatusError(null);
+    setStatusDropdownOpen(null);
+
+    try {
+      const response = await fetch(`/api/candidates/${candidateId}/status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ statusId: newStatusId }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to update status');
+      }
+
+      // Update local state
+      setCandidates(prev =>
+        prev.map(c =>
+          c.id === candidateId
+            ? { ...c, status: newStatusName, statusId: newStatusId }
+            : c
+        )
+      );
+
+      // Also update candidate details if loaded
+      if (candidateDetails[candidateId]) {
+        setCandidateDetails(prev => ({
+          ...prev,
+          [candidateId]: { ...prev[candidateId], status: newStatusName, statusId: newStatusId },
+        }));
+      }
+    } catch (err) {
+      console.error('Error updating status:', err);
+      setStatusError(err instanceof Error ? err.message : 'Failed to update status');
+      // Auto-clear error after 5 seconds
+      setTimeout(() => setStatusError(null), 5000);
+    } finally {
+      setUpdatingStatus(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -217,6 +241,21 @@ export default function CandidatesDashboard() {
 
   return (
     <>
+      {/* Error Toast */}
+      {statusError && (
+        <div className="fixed bottom-4 right-4 bg-red-500 text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 z-50 animate-pulse">
+          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+          </svg>
+          <span>{statusError}</span>
+          <button onClick={() => setStatusError(null)} className="ml-2 hover:opacity-80">
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+            </svg>
+          </button>
+        </div>
+      )}
+
       {/* Job Openings Cards */}
       <div className="mb-6">
         <div className="flex items-center justify-between mb-4">
@@ -351,9 +390,48 @@ export default function CandidatesDashboard() {
                             </div>
                           </td>
                           <td className="py-4 px-6">
-                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(candidate.status)}`}>
-                              {candidate.status || '-'}
-                            </span>
+                            <div className="relative" ref={statusDropdownOpen === candidate.id ? dropdownRef : undefined}>
+                              <button
+                                onClick={() => setStatusDropdownOpen(statusDropdownOpen === candidate.id ? null : candidate.id)}
+                                disabled={updatingStatus === candidate.id}
+                                className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(candidate.status)} hover:ring-2 hover:ring-offset-1 hover:ring-cp-blue/50 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-wait flex items-center gap-1`}
+                              >
+                                {updatingStatus === candidate.id ? (
+                                  <>
+                                    <span className="animate-spin inline-block w-3 h-3 border border-current border-t-transparent rounded-full"></span>
+                                    Updating...
+                                  </>
+                                ) : (
+                                  <>
+                                    {candidate.status || '-'}
+                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                    </svg>
+                                  </>
+                                )}
+                              </button>
+                              {statusDropdownOpen === candidate.id && availableStatuses.length > 0 && (
+                                <div className="absolute z-10 mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 max-h-60 overflow-auto">
+                                  {availableStatuses.map((status) => (
+                                    <button
+                                      key={status.id}
+                                      onClick={() => handleStatusChange(candidate.id, status.id, status.name)}
+                                      className={`w-full text-left px-3 py-2 text-sm hover:bg-cp-light transition-colors flex items-center gap-2 ${
+                                        candidate.statusId === status.id ? 'bg-cp-light font-medium' : ''
+                                      }`}
+                                    >
+                                      <span className={`w-2 h-2 rounded-full ${getStatusColor(status.name)}`}></span>
+                                      {status.name}
+                                      {candidate.statusId === status.id && (
+                                        <svg className="w-4 h-4 ml-auto text-cp-blue" fill="currentColor" viewBox="0 0 20 20">
+                                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                        </svg>
+                                      )}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
                           </td>
                           <td className="py-4 px-6 text-cp-gray">{formatDate(candidate.appliedDate)}</td>
                           <td className="py-4 px-6 text-cp-gray">{candidate.source || '-'}</td>

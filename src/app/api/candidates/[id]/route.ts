@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { CandidateDetail } from '@/types/candidates';
 
 const BAMBOO_API_KEY = process.env.BAMBOO_API_KEY;
 const BAMBOO_SUBDOMAIN = process.env.BAMBOO_SUBDOMAIN;
@@ -6,37 +7,6 @@ const BAMBOO_SUBDOMAIN = process.env.BAMBOO_SUBDOMAIN;
 function getAuthHeader(): string {
   const credentials = Buffer.from(`${BAMBOO_API_KEY}:x`).toString('base64');
   return `Basic ${credentials}`;
-}
-
-export interface CandidateDetail {
-  id: string;
-  firstName: string;
-  lastName: string;
-  displayName: string;
-  email: string;
-  phoneNumber: string;
-  jobId: number | null;
-  jobTitle: string;
-  status: string;
-  statusChangedDate: string;
-  appliedDate: string;
-  source: string;
-  linkedinUrl: string;
-  websiteUrl: string;
-  address: {
-    line1: string;
-    city: string;
-    state: string;
-    zipcode: string;
-    country: string;
-  } | null;
-  availableStartDate: string;
-  desiredSalary: string;
-  referredBy: string;
-  resumeFileId: number | null;
-  coverLetterFileId: number | null;
-  questionsAndAnswers: { question: string; answer: string }[];
-  hiringLead: { name: string; employeeId: number } | null;
 }
 
 export async function GET(
@@ -85,6 +55,7 @@ export async function GET(
       jobId: app.job?.id || null,
       jobTitle: app.job?.title?.label || '',
       status: app.status?.label || 'Unknown',
+      statusId: app.status?.id ?? null,
       statusChangedDate: app.status?.dateChanged || '',
       appliedDate: app.appliedDate || '',
       source: app.applicant?.source || '',
