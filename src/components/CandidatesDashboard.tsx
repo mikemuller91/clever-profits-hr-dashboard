@@ -17,6 +17,37 @@ interface Candidate {
   answers: { question: string; answer: string }[];
 }
 
+interface CandidateDetail {
+  id: string;
+  firstName: string;
+  lastName: string;
+  displayName: string;
+  email: string;
+  phoneNumber: string;
+  jobId: number | null;
+  jobTitle: string;
+  status: string;
+  statusChangedDate: string;
+  appliedDate: string;
+  source: string;
+  linkedinUrl: string;
+  websiteUrl: string;
+  address: {
+    line1: string;
+    city: string;
+    state: string;
+    zipcode: string;
+    country: string;
+  } | null;
+  availableStartDate: string;
+  desiredSalary: string;
+  referredBy: string;
+  resumeFileId: number | null;
+  coverLetterFileId: number | null;
+  questionsAndAnswers: { question: string; answer: string }[];
+  hiringLead: { name: string; employeeId: number } | null;
+}
+
 interface JobOpening {
   id: number;
   title: string;
@@ -32,6 +63,8 @@ export default function CandidatesDashboard() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedCandidate, setExpandedCandidate] = useState<string | null>(null);
+  const [candidateDetails, setCandidateDetails] = useState<Record<string, CandidateDetail>>({});
+  const [loadingDetails, setLoadingDetails] = useState<string | null>(null);
   const [sortColumn, setSortColumn] = useState<keyof Candidate>('appliedDate');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
@@ -131,6 +164,31 @@ export default function CandidatesDashboard() {
     if (s.includes('reject') || s.includes('declined') || s.includes('withdrew')) return 'bg-red-100 text-red-800';
     if (s.includes('offer')) return 'bg-purple-100 text-purple-800';
     return 'bg-gray-100 text-gray-800';
+  };
+
+  const fetchCandidateDetails = async (candidateId: string) => {
+    if (candidateDetails[candidateId]) {
+      // Already loaded, just toggle expansion
+      setExpandedCandidate(expandedCandidate === candidateId ? null : candidateId);
+      return;
+    }
+
+    setLoadingDetails(candidateId);
+    try {
+      const response = await fetch(`/api/candidates/${candidateId}`);
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to fetch candidate details');
+      }
+
+      setCandidateDetails(prev => ({ ...prev, [candidateId]: data }));
+      setExpandedCandidate(candidateId);
+    } catch (err) {
+      console.error('Error fetching candidate details:', err);
+    } finally {
+      setLoadingDetails(null);
+    }
   };
 
   if (loading) {
@@ -263,7 +321,7 @@ export default function CandidatesDashboard() {
                         </div>
                       </th>
                     ))}
-                    <th className="text-left py-4 px-6 font-medium">Questions</th>
+                    <th className="text-left py-4 px-6 font-medium">Details</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -300,32 +358,86 @@ export default function CandidatesDashboard() {
                           <td className="py-4 px-6 text-cp-gray">{formatDate(candidate.appliedDate)}</td>
                           <td className="py-4 px-6 text-cp-gray">{candidate.source || '-'}</td>
                           <td className="py-4 px-6">
-                            {candidate.answers && candidate.answers.length > 0 ? (
-                              <button
-                                onClick={() => setExpandedCandidate(
-                                  expandedCandidate === candidate.id ? null : candidate.id
-                                )}
-                                className="text-cp-blue hover:text-cp-dark text-sm"
-                              >
-                                {expandedCandidate === candidate.id ? 'Hide' : 'View'} ({candidate.answers.length})
-                              </button>
-                            ) : (
-                              <span className="text-cp-gray text-sm">None</span>
-                            )}
+                            <button
+                              onClick={() => fetchCandidateDetails(candidate.id)}
+                              disabled={loadingDetails === candidate.id}
+                              className="text-cp-blue hover:text-cp-dark text-sm disabled:opacity-50"
+                            >
+                              {loadingDetails === candidate.id ? (
+                                'Loading...'
+                              ) : expandedCandidate === candidate.id ? (
+                                'Hide Details'
+                              ) : (
+                                'View Details'
+                              )}
+                            </button>
                           </td>
                         </tr>
-                        {/* Expanded answers row */}
-                        {expandedCandidate === candidate.id && candidate.answers && candidate.answers.length > 0 && (
-                          <tr key={`${candidate.id}-answers`} className="bg-cp-light/30">
+                        {/* Expanded details row */}
+                        {expandedCandidate === candidate.id && candidateDetails[candidate.id] && (
+                          <tr key={`${candidate.id}-details`} className="bg-cp-light/30">
                             <td colSpan={5} className="py-4 px-6">
-                              <div className="space-y-3">
-                                <p className="font-medium text-cp-dark text-sm">Application Questions:</p>
-                                {candidate.answers.map((qa, i) => (
-                                  <div key={i} className="bg-white rounded-lg p-3 shadow-sm">
-                                    <p className="text-sm font-medium text-cp-dark">{qa.question}</p>
-                                    <p className="text-sm text-cp-gray mt-1">{qa.answer || 'No answer provided'}</p>
+                              <div className="space-y-4">
+                                {/* Contact & Additional Info */}
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                  {candidateDetails[candidate.id].phoneNumber && (
+                                    <div className="bg-white rounded-lg p-3 shadow-sm">
+                                      <p className="text-xs text-cp-gray uppercase tracking-wide">Phone</p>
+                                      <p className="text-sm font-medium text-cp-dark">{candidateDetails[candidate.id].phoneNumber}</p>
+                                    </div>
+                                  )}
+                                  {candidateDetails[candidate.id].linkedinUrl && (
+                                    <div className="bg-white rounded-lg p-3 shadow-sm">
+                                      <p className="text-xs text-cp-gray uppercase tracking-wide">LinkedIn</p>
+                                      <a href={candidateDetails[candidate.id].linkedinUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-cp-blue hover:underline">View Profile</a>
+                                    </div>
+                                  )}
+                                  {candidateDetails[candidate.id].availableStartDate && (
+                                    <div className="bg-white rounded-lg p-3 shadow-sm">
+                                      <p className="text-xs text-cp-gray uppercase tracking-wide">Available Start</p>
+                                      <p className="text-sm font-medium text-cp-dark">{formatDate(candidateDetails[candidate.id].availableStartDate)}</p>
+                                    </div>
+                                  )}
+                                  {candidateDetails[candidate.id].desiredSalary && (
+                                    <div className="bg-white rounded-lg p-3 shadow-sm">
+                                      <p className="text-xs text-cp-gray uppercase tracking-wide">Desired Salary</p>
+                                      <p className="text-sm font-medium text-cp-dark">{candidateDetails[candidate.id].desiredSalary}</p>
+                                    </div>
+                                  )}
+                                  {candidateDetails[candidate.id].referredBy && (
+                                    <div className="bg-white rounded-lg p-3 shadow-sm">
+                                      <p className="text-xs text-cp-gray uppercase tracking-wide">Referred By</p>
+                                      <p className="text-sm font-medium text-cp-dark">{candidateDetails[candidate.id].referredBy}</p>
+                                    </div>
+                                  )}
+                                  {candidateDetails[candidate.id].address && (
+                                    <div className="bg-white rounded-lg p-3 shadow-sm">
+                                      <p className="text-xs text-cp-gray uppercase tracking-wide">Location</p>
+                                      <p className="text-sm font-medium text-cp-dark">
+                                        {[
+                                          candidateDetails[candidate.id].address?.city,
+                                          candidateDetails[candidate.id].address?.state,
+                                          candidateDetails[candidate.id].address?.country
+                                        ].filter(Boolean).join(', ') || '-'}
+                                      </p>
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Questions and Answers */}
+                                {candidateDetails[candidate.id].questionsAndAnswers.length > 0 && (
+                                  <div>
+                                    <p className="font-medium text-cp-dark text-sm mb-3">Application Questions:</p>
+                                    <div className="space-y-3">
+                                      {candidateDetails[candidate.id].questionsAndAnswers.map((qa, i) => (
+                                        <div key={i} className="bg-white rounded-lg p-3 shadow-sm">
+                                          <p className="text-sm font-medium text-cp-dark">{qa.question}</p>
+                                          <p className="text-sm text-cp-gray mt-1">{qa.answer || 'No answer provided'}</p>
+                                        </div>
+                                      ))}
+                                    </div>
                                   </div>
-                                ))}
+                                )}
                               </div>
                             </td>
                           </tr>

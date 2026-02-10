@@ -85,23 +85,34 @@ export async function GET() {
 
     console.log('Total applications fetched:', allApplications.length);
 
-    // Define the application type
+    // Define the application type based on BambooHR ATS API response
     type Application = {
       id?: string | number;
       applicant?: {
+        id?: number;
         firstName?: string;
         lastName?: string;
         email?: string;
         phoneNumber?: string;
+        source?: string;
+        avatar?: string;
+        linkedinUrl?: string;
+        websiteUrl?: string;
+        address?: {
+          addressLine1?: string;
+          city?: string;
+          state?: string;
+          zipcode?: string;
+          country?: string;
+        };
       };
       job?: {
         id?: number;
         title?: { id?: number | null; label?: string };
       };
-      status?: string | { id?: string | null; label?: string };
+      status?: { id?: number | null; label?: string };
       appliedDate?: string;
-      source?: string;
-      answers?: { question?: string; answer?: string }[];
+      rating?: number | null;
     };
 
     // Transform the response
@@ -114,15 +125,10 @@ export async function GET() {
       phoneNumber: app.applicant?.phoneNumber || '',
       jobId: app.job?.id || null,
       jobTitle: app.job?.title?.label || '',
-      status: app.status
-        ? ((app.status as Record<string, unknown>)['label'] as string || 'Unknown')
-        : 'None',
+      status: app.status?.label || 'Unknown',
       appliedDate: app.appliedDate || '',
-      source: app.source || '',
-      answers: (app.answers || []).map(a => ({
-        question: a.question || '',
-        answer: a.answer || '',
-      })),
+      source: app.applicant?.source || '',
+      answers: [], // Questions require individual API calls - will implement on-demand
     }));
 
     // Extract unique job openings with candidate counts
