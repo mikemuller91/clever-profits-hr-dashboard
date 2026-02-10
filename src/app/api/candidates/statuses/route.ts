@@ -41,9 +41,10 @@ export async function GET() {
     const data = await response.json();
 
     // BambooHR returns an array of status objects with id and name
+    // Note: BambooHR may return id as string or number
     const statuses: CandidateStatus[] = (Array.isArray(data) ? data : data.statuses || []).map(
-      (status: { id?: number; name?: string }) => ({
-        id: status.id || 0,
+      (status: { id?: number | string; name?: string }) => ({
+        id: Number(status.id) || 0,
         name: status.name || 'Unknown',
       })
     );

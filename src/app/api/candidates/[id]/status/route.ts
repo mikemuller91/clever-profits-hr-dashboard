@@ -23,11 +23,13 @@ export async function POST(
 
   try {
     const body = await request.json();
-    const { statusId } = body;
+    const rawStatusId = body.statusId;
 
-    if (typeof statusId !== 'number') {
+    // Accept both string and number, convert to number
+    const statusId = Number(rawStatusId);
+    if (!rawStatusId || isNaN(statusId)) {
       return NextResponse.json(
-        { error: 'statusId is required and must be a number' },
+        { error: 'statusId is required and must be a valid number' },
         { status: 400 }
       );
     }
