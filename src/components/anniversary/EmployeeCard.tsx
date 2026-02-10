@@ -7,11 +7,10 @@ interface EmployeeCardProps {
 }
 
 function getYearsBadgeColor(years: number): string {
-  if (years >= 20) return 'bg-cp-purple/20 text-cp-purple border-cp-purple/50';
-  if (years >= 10) return 'bg-cp-dark/20 text-cp-dark border-cp-dark/50';
-  if (years >= 5) return 'bg-cp-blue/20 text-cp-blue border-cp-blue/50';
-  if (years >= 1) return 'bg-cp-cyan/20 text-cp-cyan border-cp-cyan/50';
-  return 'bg-gray-100 text-gray-600 border-gray-300';
+  if (years >= 5) return 'bg-purple-100 text-purple-700 border-purple-300';
+  if (years >= 3) return 'bg-amber-100 text-amber-700 border-amber-300';
+  if (years >= 1) return 'bg-green-100 text-green-700 border-green-300';
+  return 'bg-gray-100 text-gray-500 border-gray-300';
 }
 
 export default function EmployeeCard({ employee }: EmployeeCardProps) {

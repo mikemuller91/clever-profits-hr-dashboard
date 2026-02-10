@@ -101,20 +101,16 @@ export default function Timeline() {
             &lt;1 year
           </span>
           <span className="flex items-center gap-1">
-            <span className="w-3 h-3 rounded-full bg-cp-cyan"></span>
-            1-4 years
+            <span className="w-3 h-3 rounded-full bg-green-300"></span>
+            1-3 years
           </span>
           <span className="flex items-center gap-1">
-            <span className="w-3 h-3 rounded-full bg-cp-blue"></span>
-            5-9 years
+            <span className="w-3 h-3 rounded-full bg-amber-300"></span>
+            3-5 years
           </span>
           <span className="flex items-center gap-1">
-            <span className="w-3 h-3 rounded-full bg-cp-dark"></span>
-            10-19 years
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="w-3 h-3 rounded-full bg-cp-purple"></span>
-            20+ years
+            <span className="w-3 h-3 rounded-full bg-purple-300"></span>
+            5+ years
           </span>
         </div>
       </div>
