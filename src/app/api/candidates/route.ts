@@ -94,7 +94,15 @@ export async function GET() {
       source: app.source || '',
     }));
 
-    return NextResponse.json({ candidates });
+    // Return debug info along with candidates
+    return NextResponse.json({
+      candidates,
+      debug: {
+        firstAppKeys: applications[0] ? Object.keys(applications[0]) : [],
+        sampleJobTitle: applications[0]?.jobTitle,
+        sampleJob: applications[0]?.job,
+      }
+    });
   } catch (error) {
     console.error('Error fetching candidates:', error);
     return NextResponse.json(
