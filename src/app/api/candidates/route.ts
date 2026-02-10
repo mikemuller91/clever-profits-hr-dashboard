@@ -55,12 +55,6 @@ export async function GET() {
     // BambooHR might return data directly as array or under different keys
     const applications = Array.isArray(data) ? data : (data.applications || data.data || []);
 
-    // Debug: log first application structure
-    if (applications.length > 0) {
-      console.log('First application keys:', Object.keys(applications[0]));
-      console.log('First application:', JSON.stringify(applications[0], null, 2));
-    }
-
     // Transform the response
     const candidates: Candidate[] = applications.map((app: {
       id?: string | number;
@@ -71,9 +65,9 @@ export async function GET() {
         phoneNumber?: string;
       };
       job?: {
-        title?: string;
+        id?: number;
+        title?: { id?: number | null; label?: string };
       };
-      jobTitle?: string | { id?: string | null; label?: string };
       status?: string | { id?: string | null; label?: string };
       appliedDate?: string;
       source?: string;
@@ -84,9 +78,7 @@ export async function GET() {
       displayName: `${app.applicant?.firstName || ''} ${app.applicant?.lastName || ''}`.trim(),
       email: app.applicant?.email || '',
       phoneNumber: app.applicant?.phoneNumber || '',
-      jobTitle: app.jobTitle
-        ? ((app.jobTitle as Record<string, unknown>)['label'] as string || app.job?.title || 'Unknown')
-        : 'None',
+      jobTitle: app.job?.title?.label || '',
       status: app.status
         ? ((app.status as Record<string, unknown>)['label'] as string || 'Unknown')
         : 'None',
@@ -94,15 +86,7 @@ export async function GET() {
       source: app.source || '',
     }));
 
-    // Return debug info along with candidates
-    return NextResponse.json({
-      candidates,
-      debug: {
-        firstAppKeys: applications[0] ? Object.keys(applications[0]) : [],
-        sampleJobTitle: applications[0]?.jobTitle,
-        sampleJob: applications[0]?.job,
-      }
-    });
+    return NextResponse.json({ candidates });
   } catch (error) {
     console.error('Error fetching candidates:', error);
     return NextResponse.json(
