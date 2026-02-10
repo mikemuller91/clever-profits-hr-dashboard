@@ -40,47 +40,34 @@ export async function GET() {
   try {
     const baseUrl = `https://api.bamboohr.com/api/gateway.php/${BAMBOO_SUBDOMAIN}/v1`;
 
-    // Fetch all applications from ATS with pagination
-    let allApplications: unknown[] = [];
-    let page = 1;
-    const pageSize = 100;
-    let hasMore = true;
+    // Fetch all applications from ATS
+    // BambooHR ATS API doesn't support standard pagination, fetch all at once
+    const response = await fetch(
+      `${baseUrl}/applicant_tracking/applications`,
+      {
+        headers: {
+          'Authorization': getAuthHeader(),
+          'Accept': 'application/json',
+        },
+        cache: 'no-store',
+      }
+    );
 
-    while (hasMore) {
-      const response = await fetch(
-        `${baseUrl}/applicant_tracking/applications?page=${page}&pageSize=${pageSize}`,
-        {
-          headers: {
-            'Authorization': getAuthHeader(),
-            'Accept': 'application/json',
-          },
-          cache: 'no-store',
-        }
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('ATS API error:', response.status, errorText);
+      return NextResponse.json(
+        { error: `ATS API error: ${response.status} - ${errorText}` },
+        { status: response.status }
       );
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('ATS API error:', response.status, errorText);
-        return NextResponse.json(
-          { error: `ATS API error: ${response.status} - ${errorText}` },
-          { status: response.status }
-        );
-      }
-
-      const data = await response.json();
-      const applications = Array.isArray(data) ? data : (data.applications || data.data || []);
-
-      allApplications = [...allApplications, ...applications];
-
-      // Stop if we got fewer results than requested (no more pages)
-      if (applications.length < pageSize) {
-        hasMore = false;
-      } else {
-        page++;
-        // Safety limit to prevent infinite loops
-        if (page > 20) hasMore = false;
-      }
     }
+
+    const data = await response.json();
+
+    // Log total count for debugging
+    console.log('BambooHR ATS response - total applications:', Array.isArray(data) ? data.length : (data.applications?.length || data.data?.length || 'unknown'));
+
+    const allApplications = Array.isArray(data) ? data : (data.applications || data.data || []);
 
     // Define the application type
     type Application = {
@@ -139,7 +126,11 @@ export async function GET() {
       .map(([id, { title, count }]) => ({ id, title, candidateCount: count }))
       .sort((a, b) => b.candidateCount - a.candidateCount);
 
-    return NextResponse.json({ candidates, jobOpenings });
+    return NextResponse.json({
+      candidates,
+      jobOpenings,
+      totalFetched: allApplications.length,
+    });
   } catch (error) {
     console.error('Error fetching candidates:', error);
     return NextResponse.json(
