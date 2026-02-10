@@ -7,10 +7,18 @@ export interface Candidate {
   displayName: string;
   email: string;
   phoneNumber: string;
+  jobId: number | null;
   jobTitle: string;
   status: string;
   appliedDate: string;
   source: string;
+  answers: { question: string; answer: string }[];
+}
+
+export interface JobOpening {
+  id: number;
+  title: string;
+  candidateCount: number;
 }
 
 const BAMBOO_API_KEY = process.env.BAMBOO_API_KEY;
@@ -90,6 +98,7 @@ export async function GET() {
       status?: string | { id?: string | null; label?: string };
       appliedDate?: string;
       source?: string;
+      answers?: { question?: string; answer?: string }[];
     };
 
     // Transform the response
@@ -100,15 +109,37 @@ export async function GET() {
       displayName: `${app.applicant?.firstName || ''} ${app.applicant?.lastName || ''}`.trim(),
       email: app.applicant?.email || '',
       phoneNumber: app.applicant?.phoneNumber || '',
+      jobId: app.job?.id || null,
       jobTitle: app.job?.title?.label || '',
       status: app.status
         ? ((app.status as Record<string, unknown>)['label'] as string || 'Unknown')
         : 'None',
       appliedDate: app.appliedDate || '',
       source: app.source || '',
+      answers: (app.answers || []).map(a => ({
+        question: a.question || '',
+        answer: a.answer || '',
+      })),
     }));
 
-    return NextResponse.json({ candidates });
+    // Extract unique job openings with candidate counts
+    const jobMap = new Map<number, { title: string; count: number }>();
+    candidates.forEach(c => {
+      if (c.jobId) {
+        const existing = jobMap.get(c.jobId);
+        if (existing) {
+          existing.count++;
+        } else {
+          jobMap.set(c.jobId, { title: c.jobTitle, count: 1 });
+        }
+      }
+    });
+
+    const jobOpenings: JobOpening[] = Array.from(jobMap.entries())
+      .map(([id, { title, count }]) => ({ id, title, candidateCount: count }))
+      .sort((a, b) => b.candidateCount - a.candidateCount);
+
+    return NextResponse.json({ candidates, jobOpenings });
   } catch (error) {
     console.error('Error fetching candidates:', error);
     return NextResponse.json(
