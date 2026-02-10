@@ -39,7 +39,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           </div>
           <div className="flex items-center gap-2">
             <span className="text-cp-light/50 text-sm">Powered by</span>
-            <Image
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
               src="/bamboohr-logo.svg"
               alt="BambooHR"
               width={120}
