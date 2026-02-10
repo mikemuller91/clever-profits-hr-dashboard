@@ -121,7 +121,7 @@ export default function EmployeeDashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-cp-light flex items-center justify-center">
+      <div className="flex items-center justify-center h-64">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cp-dark mx-auto"></div>
           <p className="mt-4 text-cp-gray">Loading employees...</p>
@@ -132,31 +132,20 @@ export default function EmployeeDashboard() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-cp-light flex items-center justify-center">
-        <div className="bg-white rounded-xl p-8 shadow-lg max-w-md text-center">
-          <div className="text-red-500 text-5xl mb-4">!</div>
-          <h2 className="text-xl font-semibold text-cp-dark mb-2">Connection Error</h2>
-          <p className="text-cp-gray mb-4">{error}</p>
-          <p className="text-sm text-cp-gray">
-            Please ensure your BambooHR credentials are configured correctly in the environment variables.
-          </p>
-        </div>
+      <div className="bg-white rounded-xl p-8 shadow-lg max-w-md mx-auto text-center">
+        <div className="text-red-500 text-5xl mb-4">!</div>
+        <h2 className="text-xl font-semibold text-cp-dark mb-2">Connection Error</h2>
+        <p className="text-cp-gray mb-4">{error}</p>
+        <p className="text-sm text-cp-gray">
+          Please ensure your BambooHR credentials are configured correctly in the environment variables.
+        </p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-cp-light">
-      {/* Header */}
-      <header className="bg-cp-dark text-white py-6 px-8">
-        <div className="max-w-7xl mx-auto">
-          <h1 className="text-3xl font-bold">Clever Profits</h1>
-          <p className="text-cp-light/70 mt-1">HR Employee Dashboard</p>
-        </div>
-      </header>
-
-      <main className="max-w-7xl mx-auto px-4 sm:px-8 py-8">
-        {/* Stats Cards */}
+    <>
+      {/* Stats Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <div className="bg-white rounded-xl p-6 shadow-sm border-l-4 border-cp-blue">
             <p className="text-cp-gray text-sm">Total Employees</p>
@@ -298,12 +287,6 @@ export default function EmployeeDashboard() {
             </table>
           </div>
         </div>
-
-        {/* Footer */}
-        <div className="mt-8 text-center text-cp-gray text-sm">
-          <p>Data sourced from BambooHR</p>
-        </div>
-      </main>
-    </div>
+    </>
   );
 }
