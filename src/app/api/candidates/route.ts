@@ -78,12 +78,8 @@ export async function GET() {
       displayName: `${app.applicant?.firstName || ''} ${app.applicant?.lastName || ''}`.trim(),
       email: app.applicant?.email || '',
       phoneNumber: app.applicant?.phoneNumber || '',
-      jobTitle: app.jobTitle && typeof app.jobTitle === 'object' && 'label' in app.jobTitle
-        ? String((app.jobTitle as { label?: string }).label || '')
-        : String(app.jobTitle || app.job?.title || ''),
-      status: app.status && typeof app.status === 'object' && 'label' in app.status
-        ? String((app.status as { label?: string }).label || '')
-        : String(app.status || ''),
+      jobTitle: (app.jobTitle as { label?: string })?.label || app.job?.title || String(app.jobTitle || ''),
+      status: (app.status as { label?: string })?.label || String(app.status || ''),
       appliedDate: app.appliedDate || '',
       source: app.source || '',
     }));
