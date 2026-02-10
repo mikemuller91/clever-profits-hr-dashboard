@@ -64,23 +64,42 @@ export async function GET() {
       job?: {
         title?: string;
       };
-      status?: {
-        label?: string;
-      };
+      jobTitle?: string | { id?: string | null; label?: string };
+      status?: string | { id?: string | null; label?: string };
       appliedDate?: string;
       source?: string;
-    }) => ({
-      id: String(app.id || ''),
-      firstName: app.applicant?.firstName || '',
-      lastName: app.applicant?.lastName || '',
-      displayName: `${app.applicant?.firstName || ''} ${app.applicant?.lastName || ''}`.trim(),
-      email: app.applicant?.email || '',
-      phoneNumber: app.applicant?.phoneNumber || '',
-      jobTitle: app.job?.title || '',
-      status: app.status?.label || '',
-      appliedDate: app.appliedDate || '',
-      source: app.source || '',
-    }));
+    }) => {
+      // Handle jobTitle which can be string or object
+      let jobTitleStr = '';
+      if (typeof app.jobTitle === 'string') {
+        jobTitleStr = app.jobTitle;
+      } else if (app.jobTitle && typeof app.jobTitle === 'object') {
+        jobTitleStr = app.jobTitle.label || '';
+      } else if (app.job?.title) {
+        jobTitleStr = app.job.title;
+      }
+
+      // Handle status which can be string or object
+      let statusStr = '';
+      if (typeof app.status === 'string') {
+        statusStr = app.status;
+      } else if (app.status && typeof app.status === 'object') {
+        statusStr = app.status.label || '';
+      }
+
+      return {
+        id: String(app.id || ''),
+        firstName: app.applicant?.firstName || '',
+        lastName: app.applicant?.lastName || '',
+        displayName: `${app.applicant?.firstName || ''} ${app.applicant?.lastName || ''}`.trim(),
+        email: app.applicant?.email || '',
+        phoneNumber: app.applicant?.phoneNumber || '',
+        jobTitle: jobTitleStr,
+        status: statusStr,
+        appliedDate: app.appliedDate || '',
+        source: app.source || '',
+      };
+    });
 
     return NextResponse.json({ candidates });
   } catch (error) {
