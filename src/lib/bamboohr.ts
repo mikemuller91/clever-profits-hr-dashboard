@@ -42,7 +42,7 @@ export async function fetchEmployees(): Promise<Employee[]> {
 
   // Fetch employee directory with custom fields
   // Fields: displayName, firstName, lastName, hireDate, department, location, dateOfBirth, payRate
-  const fields = 'displayName,firstName,lastName,hireDate,department,location,dateOfBirth,payRate';
+  const fields = 'displayName,firstName,lastName,hireDate,department,location,dateOfBirth,payRate,status';
   const url = `${baseUrl}/employees/directory?fields=${fields}`;
 
   const response = await fetch(url, {
@@ -60,8 +60,13 @@ export async function fetchEmployees(): Promise<Employee[]> {
 
   const data = await response.json();
 
+  // Filter out terminated employees (only include Active status)
+  const activeEmployees = (data.employees || []).filter(
+    (emp: BambooEmployee & { status?: string }) => emp.status === 'Active'
+  );
+
   // Transform the response to our Employee interface
-  const employees: Employee[] = (data.employees || []).map((emp: BambooEmployee) => ({
+  const employees: Employee[] = activeEmployees.map((emp: BambooEmployee) => ({
     id: emp.id || '',
     displayName: emp.displayName || `${emp.firstName || ''} ${emp.lastName || ''}`.trim(),
     firstName: emp.firstName || '',
@@ -95,6 +100,7 @@ export async function fetchEmployeeReport(): Promise<Employee[]> {
     'payRate',
     'payType',
     'paidPer',
+    'status',
   ];
 
   const url = `${baseUrl}/reports/custom?format=json`;
@@ -121,7 +127,12 @@ export async function fetchEmployeeReport(): Promise<Employee[]> {
 
   const data = await response.json();
 
-  const employees: Employee[] = (data.employees || []).map((emp: BambooEmployee & { payType?: string; paidPer?: string }) => {
+  // Filter out terminated employees (only include Active status)
+  const activeEmployees = (data.employees || []).filter(
+    (emp: BambooEmployee & { status?: string }) => emp.status === 'Active'
+  );
+
+  const employees: Employee[] = activeEmployees.map((emp: BambooEmployee & { payType?: string; paidPer?: string }) => {
     let salaryDisplay = '';
     if (emp.payRate) {
       const payType = emp.payType || '';
