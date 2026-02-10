@@ -10,27 +10,18 @@ function getAuthHeader(): string {
 }
 
 // Education level scoring (out of 10)
-const EDUCATION_SCORES: Record<string, number> = {
-  'phd': 10,
-  'doctorate': 10,
-  'doctoral': 10,
-  'master': 8,
-  'masters': 8,
-  'mba': 8,
-  'msc': 8,
-  'ma': 7,
-  'bachelor': 6,
-  'bachelors': 6,
-  'bsc': 6,
-  'ba': 6,
-  'undergraduate': 6,
-  'associate': 4,
-  'diploma': 3,
-  'certificate': 2,
-  'high school': 1,
-  'secondary': 1,
-  'ged': 1,
-};
+// Order matters - more specific matches first
+const EDUCATION_LEVELS: Array<{ keywords: string[]; score: number; label: string }> = [
+  { keywords: ['phd', 'ph.d', 'doctorate', 'doctoral', 'doctor of'], score: 10, label: 'PhD/Doctorate' },
+  { keywords: ['master', 'masters', 'mba', 'm.b.a', 'msc', 'm.sc', 'mcom', 'm.com', 'ma', 'm.a'], score: 8, label: 'Masters' },
+  { keywords: ['ca(sa)', 'ca (sa)', 'chartered accountant', 'cpa', 'c.p.a', 'acca'], score: 9, label: 'Professional (CA/CPA)' },
+  { keywords: ['honour', 'honors', 'hons', 'b.com hons', 'bcom hons', 'postgraduate diploma', 'pgdip'], score: 7, label: 'Honours/Postgrad Diploma' },
+  { keywords: ['bachelor', 'bachelors', 'bcom', 'b.com', 'bsc', 'b.sc', 'ba', 'b.a', 'bba', 'b.b.a', 'llb', 'l.l.b', 'btech', 'b.tech', 'degree', 'undergraduate'], score: 6, label: 'Bachelors Degree' },
+  { keywords: ['associate', 'associates'], score: 5, label: 'Associates' },
+  { keywords: ['national diploma', 'n.dip', 'ndip', 'diploma'], score: 4, label: 'Diploma' },
+  { keywords: ['certificate', 'cert', 'certification'], score: 3, label: 'Certificate' },
+  { keywords: ['matric', 'matriculation', 'high school', 'secondary', 'ged', 'grade 12', 'nsc', 'national senior certificate'], score: 2, label: 'Matric/High School' },
+];
 
 // Institution tier scoring (bonus points)
 const PRESTIGIOUS_INSTITUTIONS = [
@@ -55,26 +46,39 @@ function scoreExperience(years: number): number {
 function extractEducationLevel(text: string): { level: string; score: number } | null {
   const lowerText = text.toLowerCase();
 
-  for (const [keyword, score] of Object.entries(EDUCATION_SCORES)) {
-    if (lowerText.includes(keyword)) {
-      return { level: keyword, score };
+  for (const eduLevel of EDUCATION_LEVELS) {
+    for (const keyword of eduLevel.keywords) {
+      if (lowerText.includes(keyword)) {
+        return { level: eduLevel.label, score: eduLevel.score };
+      }
     }
   }
   return null;
 }
 
 // Extract institution from text
-function extractInstitution(text: string): { name: string; isPrestigious: boolean } | null {
-  const lowerText = text.toLowerCase();
+function extractInstitution(text: string, isDirectQuestion: boolean = false): { name: string; isPrestigious: boolean } | null {
+  const lowerText = text.toLowerCase().trim();
 
+  // If there's no meaningful text, return null
+  if (!lowerText || lowerText.length < 2) {
+    return null;
+  }
+
+  // Check for prestigious institutions first
   for (const institution of PRESTIGIOUS_INSTITUTIONS) {
     if (lowerText.includes(institution)) {
-      return { name: institution, isPrestigious: true };
+      return { name: text.trim(), isPrestigious: true };
     }
   }
 
-  // Try to extract any university/college name
-  const uniMatch = text.match(/(?:university|college|institute|school)\s+of\s+[\w\s]+|[\w\s]+(?:university|college|institute)/i);
+  // If this is a direct answer to an institution question, use the whole answer
+  if (isDirectQuestion) {
+    return { name: text.trim(), isPrestigious: false };
+  }
+
+  // Try to extract any university/college name from longer text
+  const uniMatch = text.match(/(?:university|college|institute|school)\s+of\s+[\w\s]+|[\w\s]+(?:university|college|institute|technikon|tut|unisa|uct|wits|ukzn|up|ufs|uj|nmu|cput)/i);
   if (uniMatch) {
     return { name: uniMatch[0].trim(), isPrestigious: false };
   }
@@ -84,17 +88,25 @@ function extractInstitution(text: string): { name: string; isPrestigious: boolea
 
 // Extract years of experience from text
 function extractYearsExperience(text: string): number | null {
+  const trimmedText = text.trim();
+
+  // First, check if the answer is just a number (e.g., "5" or "10")
+  if (/^\d+$/.test(trimmedText)) {
+    return parseInt(trimmedText, 10);
+  }
+
   // Match patterns like "5 years", "5+ years", "5-7 years", "five years"
   const patterns = [
     /(\d+)\+?\s*(?:years?|yrs?)/i,
     /(\d+)\s*-\s*\d+\s*(?:years?|yrs?)/i,
-    /(one|two|three|four|five|six|seven|eight|nine|ten|fifteen|twenty)\s*(?:years?|yrs?)/i,
+    /(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fifteen|twenty)\s*(?:years?|yrs?)?/i,
+    /(\d+)\+?\s*(?:completed|full)?\s*(?:years?|yrs?)?/i,
   ];
 
   const wordToNum: Record<string, number> = {
     'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5,
     'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10,
-    'fifteen': 15, 'twenty': 20,
+    'eleven': 11, 'twelve': 12, 'fifteen': 15, 'twenty': 20,
   };
 
   for (const pattern of patterns) {
@@ -104,7 +116,10 @@ function extractYearsExperience(text: string): number | null {
       if (wordToNum[val.toLowerCase()]) {
         return wordToNum[val.toLowerCase()];
       }
-      return parseInt(val, 10);
+      const parsed = parseInt(val, 10);
+      if (!isNaN(parsed)) {
+        return parsed;
+      }
     }
   }
 
@@ -128,24 +143,28 @@ function analyzeQuestionsAndAnswers(qas: Array<{ question?: { label?: string }; 
 
     // Check for education-related questions
     if (question.includes('education') || question.includes('qualification') ||
-        question.includes('degree') || question.includes('study')) {
+        question.includes('degree') || question.includes('study') || question.includes('level')) {
       const edu = extractEducationLevel(answer);
       if (edu && (!results.education || edu.score > results.education.score)) {
         results.education = edu;
         results.fieldsUsed.push('questionsAndAnswers:education');
       }
 
-      const inst = extractInstitution(answer);
-      if (inst) {
-        results.institution = inst;
-        results.fieldsUsed.push('questionsAndAnswers:institution');
+      // Also try to extract institution from education answers (but not as direct question)
+      if (!results.institution) {
+        const inst = extractInstitution(answer, false);
+        if (inst) {
+          results.institution = inst;
+          results.fieldsUsed.push('questionsAndAnswers:institution');
+        }
       }
     }
 
-    // Check for institution-related questions
+    // Check for institution-related questions (direct question about where they studied)
     if (question.includes('university') || question.includes('college') ||
-        question.includes('institution') || question.includes('school')) {
-      const inst = extractInstitution(answer);
+        question.includes('institution') || question.includes('school') ||
+        question.includes('where') || question.includes('which')) {
+      const inst = extractInstitution(answer, true); // Pass true for direct institution question
       if (inst) {
         results.institution = inst;
         results.fieldsUsed.push('questionsAndAnswers:institution');
