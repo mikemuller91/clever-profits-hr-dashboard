@@ -23,11 +23,14 @@ const EDUCATION_LEVELS: Array<{ keywords: string[]; score: number; label: string
   { keywords: ['matric', 'matriculation', 'high school', 'secondary', 'ged', 'grade 12', 'nsc', 'national senior certificate'], score: 2, label: 'Matric/High School' },
 ];
 
-// Institution tier scoring (bonus points)
-const PRESTIGIOUS_INSTITUTIONS = [
-  'harvard', 'stanford', 'mit', 'yale', 'princeton', 'columbia', 'oxford',
-  'cambridge', 'berkeley', 'caltech', 'chicago', 'upenn', 'cornell', 'duke',
-  'northwestern', 'johns hopkins', 'ucla', 'nyu', 'michigan', 'carnegie mellon',
+// Top 5 South African universities for accounting (eligible for bonus points)
+// Based on SAICA pass rates, CTA programs, and industry reputation
+const TOP_SA_ACCOUNTING_UNIVERSITIES = [
+  { keywords: ['university of cape town', 'uct'], name: 'University of Cape Town' },
+  { keywords: ['stellenbosch', 'maties', 'us '], name: 'Stellenbosch University' },
+  { keywords: ['university of pretoria', 'tuks', ' up '], name: 'University of Pretoria' },
+  { keywords: ['witwatersrand', 'wits'], name: 'University of the Witwatersrand' },
+  { keywords: ['university of johannesburg', ' uj '], name: 'University of Johannesburg' },
 ];
 
 // Experience scoring (years to score)
@@ -57,7 +60,7 @@ function extractEducationLevel(text: string): { level: string; score: number } |
 }
 
 // Extract institution from text
-function extractInstitution(text: string, isDirectQuestion: boolean = false): { name: string; isPrestigious: boolean } | null {
+function extractInstitution(text: string, isDirectQuestion: boolean = false): { name: string; isTopSAAccounting: boolean } | null {
   const lowerText = text.toLowerCase().trim();
 
   // If there's no meaningful text, return null
@@ -65,22 +68,24 @@ function extractInstitution(text: string, isDirectQuestion: boolean = false): { 
     return null;
   }
 
-  // Check for prestigious institutions first
-  for (const institution of PRESTIGIOUS_INSTITUTIONS) {
-    if (lowerText.includes(institution)) {
-      return { name: text.trim(), isPrestigious: true };
+  // Check for top 5 SA accounting universities first
+  for (const uni of TOP_SA_ACCOUNTING_UNIVERSITIES) {
+    for (const keyword of uni.keywords) {
+      if (lowerText.includes(keyword.trim())) {
+        return { name: uni.name, isTopSAAccounting: true };
+      }
     }
   }
 
   // If this is a direct answer to an institution question, use the whole answer
   if (isDirectQuestion) {
-    return { name: text.trim(), isPrestigious: false };
+    return { name: text.trim(), isTopSAAccounting: false };
   }
 
   // Try to extract any university/college name from longer text
-  const uniMatch = text.match(/(?:university|college|institute|school)\s+of\s+[\w\s]+|[\w\s]+(?:university|college|institute|technikon|tut|unisa|uct|wits|ukzn|up|ufs|uj|nmu|cput)/i);
+  const uniMatch = text.match(/(?:university|college|institute|school)\s+of\s+[\w\s]+|[\w\s]+(?:university|college|institute|technikon)/i);
   if (uniMatch) {
-    return { name: uniMatch[0].trim(), isPrestigious: false };
+    return { name: uniMatch[0].trim(), isTopSAAccounting: false };
   }
 
   return null;
@@ -130,7 +135,7 @@ function extractYearsExperience(text: string): number | null {
 function analyzeQuestionsAndAnswers(qas: Array<{ question?: { label?: string }; answer?: { label?: string } }>) {
   const results = {
     education: null as { level: string; score: number } | null,
-    institution: null as { name: string; isPrestigious: boolean } | null,
+    institution: null as { name: string; isTopSAAccounting: boolean } | null,
     experience: null as number | null,
     fieldsUsed: [] as string[],
   };
@@ -255,12 +260,13 @@ export async function GET(
     // Calculate scores
     let educationScore = qaAnalysis.education?.score || 0;
 
-    // Add institution bonus (up to 2 points)
-    if (qaAnalysis.institution?.isPrestigious) {
-      educationScore = Math.min(10, educationScore + 2);
-    } else if (qaAnalysis.institution) {
+    // Only add institution bonus for top 5 SA accounting universities (+1 point)
+    // Education score remains capped based on qualification level
+    // (e.g., undergrad/bachelors can only reach max 7 with top university bonus)
+    if (qaAnalysis.institution?.isTopSAAccounting) {
       educationScore = Math.min(10, educationScore + 1);
     }
+    // No bonus for other institutions - score stays at qualification level
 
     const experienceScore = qaAnalysis.experience !== null
       ? scoreExperience(qaAnalysis.experience)
