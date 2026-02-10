@@ -32,31 +32,50 @@ export async function GET() {
   try {
     const baseUrl = `https://api.bamboohr.com/api/gateway.php/${BAMBOO_SUBDOMAIN}/v1`;
 
-    // Fetch applications from ATS
-    const response = await fetch(`${baseUrl}/applicant_tracking/applications`, {
-      headers: {
-        'Authorization': getAuthHeader(),
-        'Accept': 'application/json',
-      },
-      cache: 'no-store',
-    });
+    // Fetch all applications from ATS with pagination
+    let allApplications: unknown[] = [];
+    let page = 1;
+    const pageSize = 100;
+    let hasMore = true;
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('ATS API error:', response.status, errorText);
-      return NextResponse.json(
-        { error: `ATS API error: ${response.status} - ${errorText}` },
-        { status: response.status }
+    while (hasMore) {
+      const response = await fetch(
+        `${baseUrl}/applicant_tracking/applications?page=${page}&pageSize=${pageSize}`,
+        {
+          headers: {
+            'Authorization': getAuthHeader(),
+            'Accept': 'application/json',
+          },
+          cache: 'no-store',
+        }
       );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('ATS API error:', response.status, errorText);
+        return NextResponse.json(
+          { error: `ATS API error: ${response.status} - ${errorText}` },
+          { status: response.status }
+        );
+      }
+
+      const data = await response.json();
+      const applications = Array.isArray(data) ? data : (data.applications || data.data || []);
+
+      allApplications = [...allApplications, ...applications];
+
+      // Stop if we got fewer results than requested (no more pages)
+      if (applications.length < pageSize) {
+        hasMore = false;
+      } else {
+        page++;
+        // Safety limit to prevent infinite loops
+        if (page > 20) hasMore = false;
+      }
     }
 
-    const data = await response.json();
-
-    // BambooHR might return data directly as array or under different keys
-    const applications = Array.isArray(data) ? data : (data.applications || data.data || []);
-
-    // Transform the response
-    const candidates: Candidate[] = applications.map((app: {
+    // Define the application type
+    type Application = {
       id?: string | number;
       applicant?: {
         firstName?: string;
@@ -71,7 +90,10 @@ export async function GET() {
       status?: string | { id?: string | null; label?: string };
       appliedDate?: string;
       source?: string;
-    }) => ({
+    };
+
+    // Transform the response
+    const candidates: Candidate[] = (allApplications as Application[]).map((app) => ({
       id: String(app.id || ''),
       firstName: app.applicant?.firstName || '',
       lastName: app.applicant?.lastName || '',
