@@ -78,8 +78,8 @@ export async function GET() {
       displayName: `${app.applicant?.firstName || ''} ${app.applicant?.lastName || ''}`.trim(),
       email: app.applicant?.email || '',
       phoneNumber: app.applicant?.phoneNumber || '',
-      jobTitle: (app.jobTitle as { label?: string })?.label || app.job?.title || String(app.jobTitle || ''),
-      status: (app.status as { label?: string })?.label || String(app.status || ''),
+      jobTitle: app.jobTitle ? (app.jobTitle['label'] || app.job?.title || 'Unknown') : 'None',
+      status: app.status ? (app.status['label'] || 'Unknown') : 'None',
       appliedDate: app.appliedDate || '',
       source: app.source || '',
     }));
