@@ -38,7 +38,7 @@ export async function GET() {
         'Authorization': getAuthHeader(),
         'Accept': 'application/json',
       },
-      next: { revalidate: 300 },
+      cache: 'no-store',
     });
 
     if (!response.ok) {
@@ -70,22 +70,16 @@ export async function GET() {
       source?: string;
     }) => {
       // Handle jobTitle which can be string or object
-      let jobTitleStr = '';
-      if (typeof app.jobTitle === 'string') {
-        jobTitleStr = app.jobTitle;
-      } else if (app.jobTitle && typeof app.jobTitle === 'object') {
-        jobTitleStr = app.jobTitle.label || '';
-      } else if (app.job?.title) {
-        jobTitleStr = app.job.title;
-      }
+      const rawJobTitle = app.jobTitle as { label?: string } | string | undefined;
+      const jobTitleStr = typeof rawJobTitle === 'string'
+        ? rawJobTitle
+        : (rawJobTitle?.label ?? app.job?.title ?? '');
 
       // Handle status which can be string or object
-      let statusStr = '';
-      if (typeof app.status === 'string') {
-        statusStr = app.status;
-      } else if (app.status && typeof app.status === 'object') {
-        statusStr = app.status.label || '';
-      }
+      const rawStatus = app.status as { label?: string } | string | undefined;
+      const statusStr = typeof rawStatus === 'string'
+        ? rawStatus
+        : (rawStatus?.label ?? '');
 
       return {
         id: String(app.id || ''),
