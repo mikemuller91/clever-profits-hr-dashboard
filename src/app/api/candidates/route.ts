@@ -71,32 +71,22 @@ export async function GET() {
       status?: string | { id?: string | null; label?: string };
       appliedDate?: string;
       source?: string;
-    }) => {
-      // Handle jobTitle which can be string or object
-      const rawJobTitle = app.jobTitle as { label?: string } | string | undefined;
-      const jobTitleStr = typeof rawJobTitle === 'string'
-        ? rawJobTitle
-        : (rawJobTitle?.label ?? app.job?.title ?? '');
-
-      // Handle status which can be string or object
-      const rawStatus = app.status as { label?: string } | string | undefined;
-      const statusStr = typeof rawStatus === 'string'
-        ? rawStatus
-        : (rawStatus?.label ?? '');
-
-      return {
-        id: String(app.id || ''),
-        firstName: app.applicant?.firstName || '',
-        lastName: app.applicant?.lastName || '',
-        displayName: `${app.applicant?.firstName || ''} ${app.applicant?.lastName || ''}`.trim(),
-        email: app.applicant?.email || '',
-        phoneNumber: app.applicant?.phoneNumber || '',
-        jobTitle: jobTitleStr,
-        status: statusStr,
-        appliedDate: app.appliedDate || '',
-        source: app.source || '',
-      };
-    });
+    }) => ({
+      id: String(app.id || ''),
+      firstName: app.applicant?.firstName || '',
+      lastName: app.applicant?.lastName || '',
+      displayName: `${app.applicant?.firstName || ''} ${app.applicant?.lastName || ''}`.trim(),
+      email: app.applicant?.email || '',
+      phoneNumber: app.applicant?.phoneNumber || '',
+      jobTitle: typeof app.jobTitle === 'object' && app.jobTitle !== null
+        ? (app.jobTitle as { label?: string }).label || ''
+        : String(app.jobTitle || app.job?.title || ''),
+      status: typeof app.status === 'object' && app.status !== null
+        ? (app.status as { label?: string }).label || ''
+        : String(app.status || ''),
+      appliedDate: app.appliedDate || '',
+      source: app.source || '',
+    }));
 
     return NextResponse.json({ candidates });
   } catch (error) {
