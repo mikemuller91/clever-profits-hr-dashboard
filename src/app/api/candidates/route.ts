@@ -52,8 +52,11 @@ export async function GET() {
 
     const data = await response.json();
 
+    // BambooHR might return data directly as array or under different keys
+    const applications = Array.isArray(data) ? data : (data.applications || data.data || []);
+
     // Transform the response
-    const candidates: Candidate[] = (data.applications || []).map((app: {
+    const candidates: Candidate[] = applications.map((app: {
       id?: string | number;
       applicant?: {
         firstName?: string;
