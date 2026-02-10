@@ -56,3 +56,20 @@ export interface CandidateStatus {
   id: number;
   name: string;
 }
+
+export interface CandidateRating {
+  overall: number; // 0-10
+  breakdown: {
+    education: {
+      score: number; // 0-10
+      level: string | null;
+      institution: string | null;
+    };
+    experience: {
+      score: number; // 0-10
+      years: number | null;
+    };
+  };
+  confidence: 'high' | 'medium' | 'low'; // Based on how much data was available
+  dataSource: string[]; // What fields were used to calculate
+}

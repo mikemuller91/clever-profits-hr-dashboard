@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { Candidate, CandidateDetail, JobOpening, CandidateStatus } from '@/types/candidates';
+import { Candidate, CandidateDetail, JobOpening, CandidateStatus, CandidateRating } from '@/types/candidates';
 
 export default function CandidatesDashboard() {
   const [candidates, setCandidates] = useState<Candidate[]>([]);
@@ -13,6 +13,7 @@ export default function CandidatesDashboard() {
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedCandidate, setExpandedCandidate] = useState<string | null>(null);
   const [candidateDetails, setCandidateDetails] = useState<Record<string, CandidateDetail>>({});
+  const [candidateRatings, setCandidateRatings] = useState<Record<string, CandidateRating>>({});
   const [loadingDetails, setLoadingDetails] = useState<string | null>(null);
   const [sortColumn, setSortColumn] = useState<keyof Candidate>('appliedDate');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
@@ -147,6 +148,21 @@ export default function CandidatesDashboard() {
     return 'bg-gray-100 text-gray-800';
   };
 
+  const getRatingColor = (rating: number) => {
+    if (rating >= 8) return 'text-green-600 bg-green-100';
+    if (rating >= 6) return 'text-blue-600 bg-blue-100';
+    if (rating >= 4) return 'text-yellow-600 bg-yellow-100';
+    return 'text-gray-600 bg-gray-100';
+  };
+
+  const getConfidenceLabel = (confidence: 'high' | 'medium' | 'low') => {
+    switch (confidence) {
+      case 'high': return { text: 'High confidence', color: 'text-green-600' };
+      case 'medium': return { text: 'Medium confidence', color: 'text-yellow-600' };
+      case 'low': return { text: 'Low confidence', color: 'text-red-600' };
+    }
+  };
+
   const fetchCandidateDetails = async (candidateId: string) => {
     if (candidateDetails[candidateId]) {
       // Already loaded, just toggle expansion
@@ -156,14 +172,25 @@ export default function CandidatesDashboard() {
 
     setLoadingDetails(candidateId);
     try {
-      const response = await fetch(`/api/candidates/${candidateId}`);
-      const data = await response.json();
+      // Fetch details and rating in parallel
+      const [detailsResponse, ratingResponse] = await Promise.all([
+        fetch(`/api/candidates/${candidateId}`),
+        fetch(`/api/candidates/${candidateId}/rating`),
+      ]);
 
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to fetch candidate details');
+      const detailsData = await detailsResponse.json();
+      if (!detailsResponse.ok) {
+        throw new Error(detailsData.error || 'Failed to fetch candidate details');
       }
 
-      setCandidateDetails(prev => ({ ...prev, [candidateId]: data }));
+      setCandidateDetails(prev => ({ ...prev, [candidateId]: detailsData }));
+
+      // Rating is optional - don't fail if it errors
+      if (ratingResponse.ok) {
+        const ratingData = await ratingResponse.json();
+        setCandidateRatings(prev => ({ ...prev, [candidateId]: ratingData }));
+      }
+
       setExpandedCandidate(candidateId);
     } catch (err) {
       console.error('Error fetching candidate details:', err);
@@ -456,6 +483,72 @@ export default function CandidatesDashboard() {
                           <tr key={`${candidate.id}-details`} className="bg-cp-light/30">
                             <td colSpan={5} className="py-4 px-6">
                               <div className="space-y-4">
+                                {/* AI Rating */}
+                                {candidateRatings[candidate.id] && (
+                                  <div className="bg-gradient-to-r from-cp-blue/10 to-cp-cyan/10 rounded-lg p-4 border border-cp-blue/20">
+                                    <div className="flex items-center justify-between mb-3">
+                                      <h4 className="font-medium text-cp-dark flex items-center gap-2">
+                                        <svg className="w-5 h-5 text-cp-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                                        </svg>
+                                        AI Rating
+                                      </h4>
+                                      <span className={`text-xs px-2 py-1 rounded ${getConfidenceLabel(candidateRatings[candidate.id].confidence).color}`}>
+                                        {getConfidenceLabel(candidateRatings[candidate.id].confidence).text}
+                                      </span>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                      {/* Overall Score */}
+                                      <div className="bg-white rounded-lg p-3 shadow-sm text-center">
+                                        <p className="text-xs text-cp-gray uppercase tracking-wide mb-1">Overall Score</p>
+                                        <div className={`inline-flex items-center justify-center w-14 h-14 rounded-full text-2xl font-bold ${getRatingColor(candidateRatings[candidate.id].overall)}`}>
+                                          {candidateRatings[candidate.id].overall}
+                                        </div>
+                                        <p className="text-xs text-cp-gray mt-1">out of 10</p>
+                                      </div>
+                                      {/* Education Score */}
+                                      <div className="bg-white rounded-lg p-3 shadow-sm">
+                                        <p className="text-xs text-cp-gray uppercase tracking-wide">Education</p>
+                                        <p className={`text-xl font-bold ${getRatingColor(candidateRatings[candidate.id].breakdown.education.score)}`}>
+                                          {candidateRatings[candidate.id].breakdown.education.score}/10
+                                        </p>
+                                        {candidateRatings[candidate.id].breakdown.education.level && (
+                                          <p className="text-xs text-cp-gray mt-1 capitalize">
+                                            {candidateRatings[candidate.id].breakdown.education.level}
+                                          </p>
+                                        )}
+                                        {candidateRatings[candidate.id].breakdown.education.institution && (
+                                          <p className="text-xs text-cp-blue mt-0.5 capitalize truncate">
+                                            {candidateRatings[candidate.id].breakdown.education.institution}
+                                          </p>
+                                        )}
+                                      </div>
+                                      {/* Experience Score */}
+                                      <div className="bg-white rounded-lg p-3 shadow-sm">
+                                        <p className="text-xs text-cp-gray uppercase tracking-wide">Experience</p>
+                                        <p className={`text-xl font-bold ${getRatingColor(candidateRatings[candidate.id].breakdown.experience.score)}`}>
+                                          {candidateRatings[candidate.id].breakdown.experience.score}/10
+                                        </p>
+                                        {candidateRatings[candidate.id].breakdown.experience.years !== null && (
+                                          <p className="text-xs text-cp-gray mt-1">
+                                            {candidateRatings[candidate.id].breakdown.experience.years} years
+                                          </p>
+                                        )}
+                                      </div>
+                                    </div>
+                                    {candidateRatings[candidate.id].dataSource.length > 0 && (
+                                      <p className="text-xs text-cp-gray mt-3">
+                                        Data sources: {candidateRatings[candidate.id].dataSource.join(', ')}
+                                      </p>
+                                    )}
+                                    {candidateRatings[candidate.id].confidence === 'low' && (
+                                      <p className="text-xs text-yellow-600 mt-2">
+                                        Limited data available. Add application questions about education and experience for better ratings.
+                                      </p>
+                                    )}
+                                  </div>
+                                )}
+
                                 {/* Contact & Additional Info */}
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                   {candidateDetails[candidate.id].phoneNumber && (
