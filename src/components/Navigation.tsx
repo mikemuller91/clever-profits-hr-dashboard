@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { ReactNode } from 'react';
 
@@ -19,10 +20,30 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   return (
     <div className="min-h-screen bg-cp-light">
       {/* Header */}
-      <header className="bg-cp-dark text-white py-6 px-8">
-        <div className="max-w-7xl mx-auto">
-          <h1 className="text-3xl font-bold">Clever Profits</h1>
-          <p className="text-cp-light/70 mt-1">HR Employee Dashboard</p>
+      <header className="bg-cp-dark text-white py-4 px-8">
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Image
+              src="/cleverprofits-logo.png"
+              alt="CleverProfits"
+              width={150}
+              height={50}
+              className="h-12 w-auto"
+            />
+            <div>
+              <p className="text-cp-light/70 text-sm">HR Employee Dashboard</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-cp-light/50 text-sm">Powered by</span>
+            <Image
+              src="/bamboohr-logo.svg"
+              alt="BambooHR"
+              width={120}
+              height={30}
+              className="h-8 w-auto"
+            />
+          </div>
         </div>
       </header>
 
