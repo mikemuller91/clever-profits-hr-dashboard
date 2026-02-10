@@ -12,6 +12,8 @@ export interface Candidate {
   appliedDate: string;
   source: string;
   answers: { question: string; answer: string }[];
+  rating: number | null; // AI rating out of 10
+  ratingConfidence: 'high' | 'medium' | 'low' | null;
 }
 
 export interface CandidateDetail {

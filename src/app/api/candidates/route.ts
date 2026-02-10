@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { Candidate, JobOpening } from '@/types/candidates';
+import { calculateRating } from '@/lib/rating';
 
 const BAMBOO_API_KEY = process.env.BAMBOO_API_KEY;
 const BAMBOO_SUBDOMAIN = process.env.BAMBOO_SUBDOMAIN;
@@ -95,22 +96,58 @@ export async function GET() {
       rating?: number | null;
     };
 
-    // Transform the response
-    const candidates: Candidate[] = (allApplications as Application[]).map((app) => ({
-      id: String(app.id || ''),
-      firstName: app.applicant?.firstName || '',
-      lastName: app.applicant?.lastName || '',
-      displayName: `${app.applicant?.firstName || ''} ${app.applicant?.lastName || ''}`.trim(),
-      email: app.applicant?.email || '',
-      phoneNumber: app.applicant?.phoneNumber || '',
-      jobId: app.job?.id || null,
-      jobTitle: app.job?.title?.label || '',
-      status: app.status?.label || 'Unknown',
-      statusId: app.status?.id ?? null,
-      appliedDate: app.appliedDate || '',
-      source: app.applicant?.source || '',
-      answers: [], // Questions require individual API calls - will implement on-demand
-    }));
+    // Fetch detailed info for each application to get questionsAndAnswers for rating
+    // Do this in parallel batches for efficiency
+    const batchSize = 10;
+    const detailedApplications: Array<Application & { questionsAndAnswers?: Array<{ question?: { label?: string }; answer?: { label?: string } }> }> = [];
+
+    for (let i = 0; i < allApplications.length; i += batchSize) {
+      const batch = (allApplications as Application[]).slice(i, i + batchSize);
+      const detailPromises = batch.map(async (app) => {
+        try {
+          const detailUrl = `${baseUrl}/applicant_tracking/applications/${app.id}`;
+          const detailResponse = await fetch(detailUrl, {
+            headers: {
+              'Authorization': getAuthHeader(),
+              'Accept': 'application/json',
+            },
+            cache: 'no-store',
+          });
+          if (detailResponse.ok) {
+            return await detailResponse.json();
+          }
+        } catch (err) {
+          console.error(`Error fetching details for application ${app.id}:`, err);
+        }
+        return app; // Return basic app data if detail fetch fails
+      });
+
+      const batchResults = await Promise.all(detailPromises);
+      detailedApplications.push(...batchResults);
+    }
+
+    // Transform the response with ratings
+    const candidates: Candidate[] = detailedApplications.map((app) => {
+      const ratingResult = calculateRating(app.questionsAndAnswers || []);
+
+      return {
+        id: String(app.id || ''),
+        firstName: app.applicant?.firstName || '',
+        lastName: app.applicant?.lastName || '',
+        displayName: `${app.applicant?.firstName || ''} ${app.applicant?.lastName || ''}`.trim(),
+        email: app.applicant?.email || '',
+        phoneNumber: app.applicant?.phoneNumber || '',
+        jobId: app.job?.id || null,
+        jobTitle: app.job?.title?.label || '',
+        status: app.status?.label || 'Unknown',
+        statusId: app.status?.id ?? null,
+        appliedDate: app.appliedDate || '',
+        source: app.applicant?.source || '',
+        answers: [],
+        rating: ratingResult.overall,
+        ratingConfidence: ratingResult.confidence,
+      };
+    });
 
     // Extract unique job openings with candidate counts
     const jobMap = new Map<number, { title: string; count: number }>();

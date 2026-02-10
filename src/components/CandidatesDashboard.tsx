@@ -10,6 +10,7 @@ export default function CandidatesDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [selectedJobId, setSelectedJobId] = useState<number | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [ratingFilter, setRatingFilter] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedCandidate, setExpandedCandidate] = useState<string | null>(null);
   const [candidateDetails, setCandidateDetails] = useState<Record<string, CandidateDetail>>({});
@@ -93,6 +94,12 @@ export default function CandidatesDashboard() {
       result = result.filter(c => c.status === statusFilter);
     }
 
+    // Filter by rating
+    if (ratingFilter !== 'all') {
+      const minRating = parseInt(ratingFilter, 10);
+      result = result.filter(c => c.rating !== null && c.rating >= minRating);
+    }
+
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
       result = result.filter(c =>
@@ -102,6 +109,13 @@ export default function CandidatesDashboard() {
     }
 
     result = [...result].sort((a, b) => {
+      // Special handling for rating column - sort numerically
+      if (sortColumn === 'rating') {
+        const aVal = a.rating ?? -1;
+        const bVal = b.rating ?? -1;
+        return sortDirection === 'asc' ? aVal - bVal : bVal - aVal;
+      }
+
       const aVal = a[sortColumn] || '';
       const bVal = b[sortColumn] || '';
 
@@ -113,7 +127,7 @@ export default function CandidatesDashboard() {
     });
 
     return result;
-  }, [candidates, selectedJobId, statusFilter, searchTerm, sortColumn, sortDirection]);
+  }, [candidates, selectedJobId, statusFilter, ratingFilter, searchTerm, sortColumn, sortDirection]);
 
   const selectedJob = jobOpenings.find(j => j.id === selectedJobId);
 
@@ -348,10 +362,26 @@ export default function CandidatesDashboard() {
                 </select>
               </div>
 
-              {(statusFilter !== 'all' || searchTerm) && (
+              <div className="min-w-[160px]">
+                <label className="block text-sm font-medium text-cp-gray mb-1">Min Rating</label>
+                <select
+                  value={ratingFilter}
+                  onChange={(e) => setRatingFilter(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-cp-blue focus:border-transparent outline-none bg-white"
+                >
+                  <option value="all">All Ratings</option>
+                  <option value="8">8+ (Excellent)</option>
+                  <option value="6">6+ (Good)</option>
+                  <option value="4">4+ (Fair)</option>
+                  <option value="1">1+ (Any rated)</option>
+                </select>
+              </div>
+
+              {(statusFilter !== 'all' || ratingFilter !== 'all' || searchTerm) && (
                 <button
                   onClick={() => {
                     setStatusFilter('all');
+                    setRatingFilter('all');
                     setSearchTerm('');
                   }}
                   className="px-4 py-2 text-cp-blue hover:text-cp-dark transition-colors"
@@ -370,6 +400,7 @@ export default function CandidatesDashboard() {
                   <tr className="bg-cp-dark text-white">
                     {[
                       { key: 'displayName', label: 'Candidate' },
+                      { key: 'rating', label: 'Rating' },
                       { key: 'status', label: 'Status' },
                       { key: 'appliedDate', label: 'Applied Date' },
                       { key: 'source', label: 'Source' },
@@ -393,7 +424,7 @@ export default function CandidatesDashboard() {
                 <tbody>
                   {filteredCandidates.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="py-12 text-center text-cp-gray">
+                      <td colSpan={6} className="py-12 text-center text-cp-gray">
                         No candidates found matching your criteria
                       </td>
                     </tr>
@@ -415,6 +446,20 @@ export default function CandidatesDashboard() {
                                 <p className="text-xs text-cp-gray">{candidate.email || '-'}</p>
                               </div>
                             </div>
+                          </td>
+                          <td className="py-4 px-6">
+                            {candidate.rating !== null ? (
+                              <div className="flex items-center gap-2">
+                                <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full text-sm font-bold ${getRatingColor(candidate.rating)}`}>
+                                  {candidate.rating}
+                                </span>
+                                {candidate.ratingConfidence === 'low' && (
+                                  <span className="text-xs text-yellow-600" title="Limited data available">?</span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-cp-gray text-sm">-</span>
+                            )}
                           </td>
                           <td className="py-4 px-6">
                             <div className="relative" ref={statusDropdownOpen === candidate.id ? dropdownRef : undefined}>
@@ -481,7 +526,7 @@ export default function CandidatesDashboard() {
                         {/* Expanded details row */}
                         {expandedCandidate === candidate.id && candidateDetails[candidate.id] && (
                           <tr key={`${candidate.id}-details`} className="bg-cp-light/30">
-                            <td colSpan={5} className="py-4 px-6">
+                            <td colSpan={6} className="py-4 px-6">
                               <div className="space-y-4">
                                 {/* AI Rating */}
                                 {candidateRatings[candidate.id] && (
