@@ -49,29 +49,44 @@ function extractEducationLevel(text: string): { level: string; score: number } |
   return null;
 }
 
-// Extract institution from text
-function extractInstitution(text: string, isDirectQuestion: boolean = false): { name: string; isTopSAAccounting: boolean } | null {
+// Check if institution is a top SA accounting university (for bonus points only)
+function isTopSAAccountingUniversity(text: string): boolean {
   const lowerText = text.toLowerCase().trim();
+  for (const uni of TOP_SA_ACCOUNTING_UNIVERSITIES) {
+    for (const keyword of uni.keywords) {
+      if (lowerText.includes(keyword.trim())) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+// Extract institution from text - always use the actual answer text
+function extractInstitution(text: string, isDirectQuestion: boolean = false): { name: string; isTopSAAccounting: boolean } | null {
+  const trimmedText = text.trim();
+  const lowerText = trimmedText.toLowerCase();
 
   if (!lowerText || lowerText.length < 2) {
     return null;
   }
 
-  for (const uni of TOP_SA_ACCOUNTING_UNIVERSITIES) {
-    for (const keyword of uni.keywords) {
-      if (lowerText.includes(keyword.trim())) {
-        return { name: uni.name, isTopSAAccounting: true };
-      }
-    }
-  }
-
+  // For direct institution questions, always use the exact answer
   if (isDirectQuestion) {
-    return { name: text.trim(), isTopSAAccounting: false };
+    return {
+      name: trimmedText,
+      isTopSAAccounting: isTopSAAccountingUniversity(lowerText)
+    };
   }
 
-  const uniMatch = text.match(/(?:university|college|institute|school)\s+of\s+[\w\s]+|[\w\s]+(?:university|college|institute|technikon)/i);
+  // For indirect mentions, try to extract university/college name
+  const uniMatch = text.match(/(?:university|college|institute|school)\s+of\s+[\w\s]+|[\w\s]+(?:university|college|institute|technikon|business school)/i);
   if (uniMatch) {
-    return { name: uniMatch[0].trim(), isTopSAAccounting: false };
+    const name = uniMatch[0].trim();
+    return {
+      name,
+      isTopSAAccounting: isTopSAAccountingUniversity(name)
+    };
   }
 
   return null;
@@ -148,10 +163,16 @@ function analyzeQuestionsAndAnswers(qas: Array<{ question?: { label?: string }; 
       }
     }
 
-    // Check for institution-related questions
-    if (question.includes('university') || question.includes('college') ||
-        question.includes('institution') || question.includes('school') ||
-        question.includes('where') || question.includes('which')) {
+    // Check for institution-related questions - be specific to avoid false matches
+    // Must contain "institution" or be specifically about education/university
+    const isInstitutionQuestion =
+      question.includes('institution') ||
+      question.includes('university') ||
+      question.includes('college') ||
+      (question.includes('which') && (question.includes('educational') || question.includes('qualification'))) ||
+      (question.includes('where') && (question.includes('study') || question.includes('studied') || question.includes('degree') || question.includes('qualification')));
+
+    if (isInstitutionQuestion) {
       const inst = extractInstitution(answer, true);
       if (inst) {
         results.institution = inst;
