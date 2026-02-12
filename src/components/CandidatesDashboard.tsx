@@ -11,6 +11,7 @@ export default function CandidatesDashboard() {
   const [selectedJobId, setSelectedJobId] = useState<number | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [ratingFilter, setRatingFilter] = useState<string>('all');
+  const [universityFilter, setUniversityFilter] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedCandidate, setExpandedCandidate] = useState<string | null>(null);
   const [candidateDetails, setCandidateDetails] = useState<Record<string, CandidateDetail>>({});
@@ -81,6 +82,12 @@ export default function CandidatesDashboard() {
     return ['all', ...Array.from(statusSet).sort()];
   }, [candidates]);
 
+  // Get unique universities for filter
+  const universities = useMemo(() => {
+    const uniSet = new Set(candidates.map(c => c.institution).filter(Boolean) as string[]);
+    return ['all', ...Array.from(uniSet).sort()];
+  }, [candidates]);
+
   // Filter and sort candidates
   const filteredCandidates = useMemo(() => {
     let result = candidates;
@@ -98,6 +105,11 @@ export default function CandidatesDashboard() {
     if (ratingFilter !== 'all') {
       const minRating = parseInt(ratingFilter, 10);
       result = result.filter(c => c.rating !== null && c.rating >= minRating);
+    }
+
+    // Filter by university
+    if (universityFilter !== 'all') {
+      result = result.filter(c => c.institution === universityFilter);
     }
 
     if (searchTerm) {
@@ -127,7 +139,7 @@ export default function CandidatesDashboard() {
     });
 
     return result;
-  }, [candidates, selectedJobId, statusFilter, ratingFilter, searchTerm, sortColumn, sortDirection]);
+  }, [candidates, selectedJobId, statusFilter, ratingFilter, universityFilter, searchTerm, sortColumn, sortDirection]);
 
   const selectedJob = jobOpenings.find(j => j.id === selectedJobId);
 
@@ -377,11 +389,27 @@ export default function CandidatesDashboard() {
                 </select>
               </div>
 
-              {(statusFilter !== 'all' || ratingFilter !== 'all' || searchTerm) && (
+              <div className="min-w-[200px]">
+                <label className="block text-sm font-medium text-cp-gray mb-1">University</label>
+                <select
+                  value={universityFilter}
+                  onChange={(e) => setUniversityFilter(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-cp-blue focus:border-transparent outline-none bg-white"
+                >
+                  {universities.map((uni) => (
+                    <option key={uni} value={uni}>
+                      {uni === 'all' ? 'All Universities' : uni}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {(statusFilter !== 'all' || ratingFilter !== 'all' || universityFilter !== 'all' || searchTerm) && (
                 <button
                   onClick={() => {
                     setStatusFilter('all');
                     setRatingFilter('all');
+                    setUniversityFilter('all');
                     setSearchTerm('');
                   }}
                   className="px-4 py-2 text-cp-blue hover:text-cp-dark transition-colors"

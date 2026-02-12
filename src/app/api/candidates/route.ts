@@ -146,6 +146,7 @@ export async function GET() {
         answers: [],
         rating: ratingResult.overall,
         ratingConfidence: ratingResult.confidence,
+        institution: ratingResult.institution,
       };
     });
 

@@ -14,6 +14,7 @@ export interface Candidate {
   answers: { question: string; answer: string }[];
   rating: number | null; // AI rating out of 10
   ratingConfidence: 'high' | 'medium' | 'low' | null;
+  institution: string | null; // University/institution from application
 }
 
 export interface CandidateDetail {
