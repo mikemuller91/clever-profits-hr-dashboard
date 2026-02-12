@@ -2,15 +2,17 @@
 
 // Education level scoring (out of 10)
 // Order matters - more specific matches first
+// Keywords starting with ^ require word boundary matching (to avoid 'ma' matching 'diploma')
 const EDUCATION_LEVELS: Array<{ keywords: string[]; score: number; label: string }> = [
-  { keywords: ['phd', 'ph.d', 'doctorate', 'doctoral', 'doctor of'], score: 10, label: 'PhD/Doctorate' },
+  { keywords: ['phd', 'ph.d', 'ph.d.', 'doctorate', 'doctoral', 'doctor of'], score: 10, label: 'PhD/Doctorate' },
   { keywords: ['ca(sa)', 'ca (sa)', 'chartered accountant', 'cpa', 'c.p.a', 'acca'], score: 9, label: 'Professional (CA/CPA)' },
-  { keywords: ['master', 'masters', 'mba', 'm.b.a', 'msc', 'm.sc', 'mcom', 'm.com', 'ma', 'm.a'], score: 8, label: 'Masters' },
-  { keywords: ['honour', 'honors', 'hons', 'b.com hons', 'bcom hons', 'postgraduate diploma', 'pgdip'], score: 7, label: 'Honours/Postgrad Diploma' },
-  { keywords: ['bachelor', 'bachelors', 'bcom', 'b.com', 'bsc', 'b.sc', 'ba', 'b.a', 'bba', 'b.b.a', 'llb', 'l.l.b', 'btech', 'b.tech', 'degree', 'undergraduate'], score: 6, label: 'Bachelors Degree' },
-  { keywords: ['associate', 'associates'], score: 5, label: 'Associates' },
-  { keywords: ['national diploma', 'n.dip', 'ndip', 'diploma'], score: 4, label: 'Diploma' },
-  { keywords: ['certificate', 'cert', 'certification'], score: 3, label: 'Certificate' },
+  { keywords: ['postgraduate diploma', 'post graduate diploma', 'post-graduate diploma', 'pgdip', 'pg dip', 'pg diploma'], score: 7, label: 'Postgraduate Diploma' },
+  { keywords: ['honour', 'honors', '^hons', 'b.com hons', 'bcom hons', 'honours degree'], score: 7, label: 'Honours' },
+  { keywords: ['masters degree', 'master of', 'master\'s', 'mba', 'm.b.a', 'msc', 'm.sc', 'mcom', 'm.com', '^ma ', 'm.a.', 'magister'], score: 8, label: 'Masters' },
+  { keywords: ['bachelor', 'bachelors', 'bcom', 'b.com', 'bsc', 'b.sc', '^ba ', 'b.a.', 'bba', 'b.b.a', 'llb', 'l.l.b', 'btech', 'b.tech', 'undergraduate degree'], score: 6, label: 'Bachelors Degree' },
+  { keywords: ['associate degree', 'associates degree'], score: 5, label: 'Associates' },
+  { keywords: ['national diploma', 'n.dip', 'ndip', '^diploma'], score: 4, label: 'Diploma' },
+  { keywords: ['certificate', 'certification'], score: 3, label: 'Certificate' },
   { keywords: ['matric', 'matriculation', 'high school', 'secondary', 'ged', 'grade 12', 'nsc', 'national senior certificate'], score: 2, label: 'Matric/High School' },
 ];
 
@@ -37,12 +39,22 @@ function scoreExperience(years: number): number {
 
 // Extract education level from text
 function extractEducationLevel(text: string): { level: string; score: number } | null {
-  const lowerText = text.toLowerCase();
+  const lowerText = ' ' + text.toLowerCase() + ' '; // Add spaces for word boundary matching
 
   for (const eduLevel of EDUCATION_LEVELS) {
     for (const keyword of eduLevel.keywords) {
-      if (lowerText.includes(keyword)) {
-        return { level: eduLevel.label, score: eduLevel.score };
+      if (keyword.startsWith('^')) {
+        // Word boundary match - keyword must be at start of word
+        const cleanKeyword = keyword.slice(1);
+        // Check if keyword appears with a word boundary before it
+        const regex = new RegExp(`(?:^|[\\s,.()])${cleanKeyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'i');
+        if (regex.test(lowerText)) {
+          return { level: eduLevel.label, score: eduLevel.score };
+        }
+      } else {
+        if (lowerText.includes(keyword)) {
+          return { level: eduLevel.label, score: eduLevel.score };
+        }
       }
     }
   }
