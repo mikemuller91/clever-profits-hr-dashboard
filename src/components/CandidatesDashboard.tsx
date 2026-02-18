@@ -36,6 +36,28 @@ export default function CandidatesDashboard() {
   const [cvLoading, setCvLoading] = useState(false);
   const [cvError, setCvError] = useState<string | null>(null);
 
+  // Keyword search state
+  const [keywordSearch, setKeywordSearch] = useState('');
+  const [searchCvs, setSearchCvs] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchResults, setSearchResults] = useState<{
+    keyword: string;
+    totalResults: number;
+    results: {
+      candidateId: string;
+      candidateName: string;
+      email: string;
+      jobTitle: string;
+      matches: {
+        type: 'question' | 'cv';
+        question?: string;
+        answer?: string;
+        cvExcerpt?: string;
+      }[];
+    }[];
+  } | null>(null);
+  const [showSearchResults, setShowSearchResults] = useState(false);
+
   // Close dropdown when clicking outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -362,6 +384,62 @@ export default function CandidatesDashboard() {
     setCvError(null);
   };
 
+  // Keyword search handler
+  const handleKeywordSearch = async () => {
+    if (!keywordSearch.trim() || keywordSearch.trim().length < 2) {
+      return;
+    }
+
+    setIsSearching(true);
+    setShowSearchResults(true);
+
+    try {
+      const response = await fetch('/api/candidates/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          keyword: keywordSearch.trim(),
+          jobId: selectedJobId,
+          searchCv: searchCvs,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Search failed');
+      }
+
+      setSearchResults(data);
+    } catch (err) {
+      console.error('Search error:', err);
+      setStatusError(err instanceof Error ? err.message : 'Search failed');
+      setTimeout(() => setStatusError(null), 5000);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const clearSearch = () => {
+    setKeywordSearch('');
+    setSearchResults(null);
+    setShowSearchResults(false);
+  };
+
+  // Highlight search term in text
+  const highlightMatch = (text: string, term: string) => {
+    if (!term) return text;
+    const regex = new RegExp(`(${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+    const parts = text.split(regex);
+    return parts.map((part, i) =>
+      regex.test(part) ? (
+        <mark key={i} className="bg-yellow-200 px-0.5 rounded">{part}</mark>
+      ) : (
+        part
+      )
+    );
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -513,6 +591,146 @@ export default function CandidatesDashboard() {
               )}
             </div>
           </div>
+
+          {/* Keyword Search */}
+          <div className="bg-gradient-to-r from-cp-cyan/10 to-cp-blue/10 rounded-xl p-6 shadow-sm mb-6 border border-cp-blue/20">
+            <div className="flex items-center gap-2 mb-3">
+              <svg className="w-5 h-5 text-cp-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <h3 className="font-semibold text-cp-dark">Keyword Search</h3>
+              <span className="text-xs text-cp-gray">(Search across application answers and CVs)</span>
+            </div>
+            <div className="flex flex-wrap gap-4 items-end">
+              <div className="flex-1 min-w-[300px]">
+                <input
+                  type="text"
+                  value={keywordSearch}
+                  onChange={(e) => setKeywordSearch(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleKeywordSearch()}
+                  placeholder="Enter keywords (e.g., Python, CPA, MBA, marketing)..."
+                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-cp-blue focus:border-transparent outline-none"
+                />
+              </div>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={searchCvs}
+                  onChange={(e) => setSearchCvs(e.target.checked)}
+                  className="w-4 h-4 rounded border-gray-300 text-cp-blue focus:ring-cp-blue"
+                />
+                <span className="text-sm text-cp-gray">Include CV content</span>
+                {searchCvs && (
+                  <span className="text-xs text-yellow-600">(slower)</span>
+                )}
+              </label>
+              <button
+                onClick={handleKeywordSearch}
+                disabled={isSearching || keywordSearch.trim().length < 2}
+                className="px-6 py-2 bg-cp-blue text-white rounded-lg hover:bg-cp-dark transition-colors disabled:opacity-50 flex items-center gap-2"
+              >
+                {isSearching ? (
+                  <>
+                    <span className="animate-spin inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full"></span>
+                    Searching...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                    Search
+                  </>
+                )}
+              </button>
+              {searchResults && (
+                <button
+                  onClick={clearSearch}
+                  className="px-4 py-2 text-cp-gray hover:text-cp-dark transition-colors"
+                >
+                  Clear Results
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Search Results */}
+          {showSearchResults && searchResults && (
+            <div className="bg-white rounded-xl shadow-sm mb-6 overflow-hidden border border-cp-blue/20">
+              <div className="p-4 border-b border-gray-100 bg-cp-light/50">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-semibold text-cp-dark">
+                      Search Results for &quot;{searchResults.keyword}&quot;
+                    </h3>
+                    <p className="text-sm text-cp-gray">
+                      Found {searchResults.totalResults} candidate{searchResults.totalResults !== 1 ? 's' : ''} with matches
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setShowSearchResults(false)}
+                    className="text-cp-gray hover:text-cp-dark"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+              {searchResults.results.length === 0 ? (
+                <div className="p-8 text-center text-cp-gray">
+                  No matches found for &quot;{searchResults.keyword}&quot;
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-100 max-h-96 overflow-y-auto">
+                  {searchResults.results.map((result) => (
+                    <div key={result.candidateId} className="p-4 hover:bg-cp-light/30">
+                      <div className="flex items-start justify-between mb-2">
+                        <div>
+                          <p className="font-medium text-cp-dark">{result.candidateName}</p>
+                          <p className="text-sm text-cp-gray">{result.email}</p>
+                        </div>
+                        <button
+                          onClick={() => {
+                            fetchCandidateDetails(result.candidateId);
+                            setShowSearchResults(false);
+                          }}
+                          className="text-sm text-cp-blue hover:text-cp-dark"
+                        >
+                          View Details →
+                        </button>
+                      </div>
+                      <div className="space-y-2">
+                        {result.matches.map((match, idx) => (
+                          <div
+                            key={idx}
+                            className={`text-sm p-2 rounded ${
+                              match.type === 'cv'
+                                ? 'bg-purple-50 border-l-2 border-purple-400'
+                                : 'bg-blue-50 border-l-2 border-blue-400'
+                            }`}
+                          >
+                            {match.type === 'question' ? (
+                              <>
+                                <p className="text-xs text-cp-gray uppercase mb-1">Application Answer</p>
+                                <p className="font-medium text-cp-dark text-xs mb-1">{match.question}</p>
+                                <p className="text-cp-gray">{highlightMatch(match.answer || '', searchResults.keyword)}</p>
+                              </>
+                            ) : (
+                              <>
+                                <p className="text-xs text-purple-600 uppercase mb-1">CV Match</p>
+                                <p className="text-cp-gray">{highlightMatch(match.cvExcerpt || '', searchResults.keyword)}</p>
+                              </>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Bulk Action Bar */}
           {selectedCandidates.size > 0 && (
