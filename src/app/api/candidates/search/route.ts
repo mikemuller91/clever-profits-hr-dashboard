@@ -61,6 +61,23 @@ export async function POST(request: Request) {
     const searchTerm = keyword.toLowerCase().trim();
     const baseUrl = `https://api.bamboohr.com/api/gateway.php/${BAMBOO_SUBDOMAIN}/v1`;
 
+    // Helper function to delay between requests
+    const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+    // Helper function to fetch with retry on rate limit
+    const fetchWithRetry = async (url: string, options: RequestInit, retries = 3): Promise<Response> => {
+      for (let i = 0; i < retries; i++) {
+        const response = await fetch(url, options);
+        if (response.status === 503 || response.status === 429) {
+          // Rate limited - wait and retry
+          await delay(1000 * (i + 1)); // Exponential backoff
+          continue;
+        }
+        return response;
+      }
+      return fetch(url, options); // Final attempt
+    };
+
     // Fetch all applications (with pagination)
     let allApplications: Application[] = [];
     let page = 1;
@@ -72,7 +89,7 @@ export async function POST(request: Request) {
         applicationsUrl += `&jobId=${jobId}`;
       }
 
-      const appsResponse = await fetch(applicationsUrl, {
+      const appsResponse = await fetchWithRetry(applicationsUrl, {
         headers: {
           'Authorization': getAuthHeader(),
           'Accept': 'application/json',
@@ -94,13 +111,16 @@ export async function POST(request: Request) {
         page++;
         if (page > 100) hasMore = false; // Safety limit
       }
+
+      // Small delay between pagination requests
+      if (hasMore) await delay(200);
     }
 
     const results: SearchResult[] = [];
 
     // Fetch detailed info for each application and search
     // Process in batches to avoid overwhelming the API
-    const batchSize = 5;
+    const batchSize = 3;
 
     for (let i = 0; i < allApplications.length; i += batchSize) {
       const batch = allApplications.slice(i, i + batchSize);
@@ -113,7 +133,7 @@ export async function POST(request: Request) {
         let detailedApp = app;
         try {
           const detailUrl = `${baseUrl}/applicant_tracking/applications/${candidateId}`;
-          const detailResponse = await fetch(detailUrl, {
+          const detailResponse = await fetchWithRetry(detailUrl, {
             headers: {
               'Authorization': getAuthHeader(),
               'Accept': 'application/json',
@@ -155,7 +175,7 @@ export async function POST(request: Request) {
         if (searchCv && resumeFileId) {
           try {
             const cvUrl = `${baseUrl}/applicant_tracking/applications/${candidateId}/files/${resumeFileId}`;
-            const cvResponse = await fetch(cvUrl, {
+            const cvResponse = await fetchWithRetry(cvUrl, {
               headers: {
                 'Authorization': getAuthHeader(),
               },
@@ -224,6 +244,11 @@ export async function POST(request: Request) {
 
       const batchResults = await Promise.all(batchPromises);
       results.push(...batchResults.filter((r): r is SearchResult => r !== null));
+
+      // Delay between batches to avoid rate limiting
+      if (i + batchSize < allApplications.length) {
+        await delay(500);
+      }
     }
 
     return NextResponse.json({
