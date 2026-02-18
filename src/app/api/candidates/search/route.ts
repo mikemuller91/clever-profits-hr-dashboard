@@ -61,22 +61,42 @@ export async function POST(request: Request) {
       throw new Error(`Failed to fetch applications: ${appsResponse.status}`);
     }
 
-    const applications = await appsResponse.json();
+    const applicationsData = await appsResponse.json();
+
+    // Handle different response formats from BambooHR
+    let applications: unknown[];
+    if (Array.isArray(applicationsData)) {
+      applications = applicationsData;
+    } else if (applicationsData.applications && Array.isArray(applicationsData.applications)) {
+      applications = applicationsData.applications;
+    } else {
+      applications = [];
+    }
+
     const results: SearchResult[] = [];
 
     // Process each application
-    for (const app of applications) {
+    for (const appData of applications) {
+      const app = appData as Record<string, unknown>;
       const matches: SearchResult['matches'] = [];
-      const candidateId = String(app.id);
-      const candidateName = `${app.applicant?.firstName || ''} ${app.applicant?.lastName || ''}`.trim();
-      const email = app.applicant?.email || '';
-      const jobTitle = app.job?.title?.label || '';
+      const candidateId = String(app.id || '');
+
+      const applicant = app.applicant as Record<string, unknown> | undefined;
+      const job = app.job as Record<string, unknown> | undefined;
+      const jobTitle = job?.title as Record<string, unknown> | undefined;
+
+      const candidateName = `${applicant?.firstName || ''} ${applicant?.lastName || ''}`.trim();
+      const email = String(applicant?.email || '');
+      const jobTitleLabel = String(jobTitle?.label || '');
 
       // Search in questions and answers
-      const questionsAndAnswers = app.questionsAndAnswers || [];
-      for (const qa of questionsAndAnswers) {
-        const question = qa.question?.label || '';
-        const answer = qa.answer?.label || '';
+      const questionsAndAnswers = (app.questionsAndAnswers as unknown[]) || [];
+      for (const qaData of questionsAndAnswers) {
+        const qa = qaData as Record<string, unknown>;
+        const questionObj = qa.question as Record<string, unknown> | undefined;
+        const answerObj = qa.answer as Record<string, unknown> | undefined;
+        const question = String(questionObj?.label || '');
+        const answer = String(answerObj?.label || '');
 
         if (
           question.toLowerCase().includes(searchTerm) ||
@@ -91,9 +111,10 @@ export async function POST(request: Request) {
       }
 
       // Search in CV if requested and resumeFileId exists
-      if (searchCv && app.resumeFileId) {
+      const resumeFileId = app.resumeFileId as number | undefined;
+      if (searchCv && resumeFileId) {
         try {
-          const cvUrl = `${baseUrl}/applicant_tracking/applications/${candidateId}/files/${app.resumeFileId}`;
+          const cvUrl = `${baseUrl}/applicant_tracking/applications/${candidateId}/files/${resumeFileId}`;
           const cvResponse = await fetch(cvUrl, {
             headers: {
               'Authorization': getAuthHeader(),
@@ -158,7 +179,7 @@ export async function POST(request: Request) {
           candidateId,
           candidateName,
           email,
-          jobTitle,
+          jobTitle: jobTitleLabel,
           matches,
         });
       }
