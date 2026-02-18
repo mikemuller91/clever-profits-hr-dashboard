@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
-
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const pdfParse = require('pdf-parse');
+import { extractText } from 'unpdf';
 
 const BAMBOO_API_KEY = process.env.BAMBOO_API_KEY;
 const BAMBOO_SUBDOMAIN = process.env.BAMBOO_SUBDOMAIN;
@@ -108,15 +106,16 @@ export async function POST(request: Request) {
 
             if (contentType.includes('pdf')) {
               const pdfBuffer = await cvResponse.arrayBuffer();
-              const pdfData = await pdfParse(Buffer.from(pdfBuffer));
-              const cvText = pdfData.text.toLowerCase();
+              const { text: pdfTextArray } = await extractText(new Uint8Array(pdfBuffer));
+              const pdfText = Array.isArray(pdfTextArray) ? pdfTextArray.join(' ') : String(pdfTextArray);
+              const cvText = pdfText.toLowerCase();
 
               if (cvText.includes(searchTerm)) {
                 // Find the excerpt containing the search term
                 const index = cvText.indexOf(searchTerm);
                 const start = Math.max(0, index - 50);
                 const end = Math.min(cvText.length, index + searchTerm.length + 50);
-                let excerpt = pdfData.text.substring(start, end).trim();
+                let excerpt = pdfText.substring(start, end).trim();
 
                 // Clean up the excerpt
                 excerpt = excerpt.replace(/\s+/g, ' ');
