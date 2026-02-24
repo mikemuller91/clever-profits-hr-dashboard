@@ -16,11 +16,16 @@ export default function CandidatesDashboard() {
     aiEvaluationLoading,
     loading,
     error,
+    lastSync,
+    syncing,
     fetchCandidateDetails: contextFetchDetails,
     fetchAIEvaluation,
     updateCandidateStatus,
     ensureLoaded,
+    syncCandidates,
   } = useCandidates();
+
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
   // Local UI state
   const [selectedJobId, setSelectedJobId] = useState<number | null>(null);
@@ -422,6 +427,51 @@ export default function CandidatesDashboard() {
           </button>
         </div>
       )}
+
+      {/* Sync Bar */}
+      <div className="bg-white rounded-lg p-3 shadow-sm mb-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-cp-gray">
+            {lastSync ? (
+              <>Last synced: {new Date(lastSync).toLocaleString()}</>
+            ) : (
+              <>Not synced yet</>
+            )}
+          </span>
+          {syncMessage && (
+            <span className="text-sm text-green-600 font-medium">{syncMessage}</span>
+          )}
+        </div>
+        <button
+          onClick={async () => {
+            setSyncMessage(null);
+            const result = await syncCandidates();
+            if (result) {
+              setSyncMessage(result.newCount > 0
+                ? `Synced! ${result.newCount} new candidate${result.newCount !== 1 ? 's' : ''} found`
+                : 'Synced! No new candidates'
+              );
+              setTimeout(() => setSyncMessage(null), 5000);
+            }
+          }}
+          disabled={syncing}
+          className="flex items-center gap-2 px-4 py-2 bg-cp-blue text-white text-sm rounded-lg hover:bg-cp-dark transition-colors disabled:opacity-50"
+        >
+          {syncing ? (
+            <>
+              <span className="animate-spin inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full"></span>
+              Syncing...
+            </>
+          ) : (
+            <>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              Sync Candidates
+            </>
+          )}
+        </button>
+      </div>
 
       {/* Job Openings - Compact */}
       <div className="bg-white rounded-lg p-3 shadow-sm mb-6">

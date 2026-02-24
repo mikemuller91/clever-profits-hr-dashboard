@@ -17,6 +17,8 @@ interface CandidatesContextType {
   error: string | null;
   initialized: boolean;
   aiEvaluationLoading: Record<string, boolean>;
+  lastSync: string | null;
+  syncing: boolean;
 
   // Actions
   setCandidates: React.Dispatch<React.SetStateAction<Candidate[]>>;
@@ -25,6 +27,7 @@ interface CandidatesContextType {
   updateCandidateStatus: (candidateId: string, statusId: number, statusName: string) => Promise<boolean>;
   refresh: () => Promise<void>;
   ensureLoaded: () => Promise<void>;
+  syncCandidates: () => Promise<{ newCount: number } | null>;
 }
 
 const CandidatesContext = createContext<CandidatesContextType | null>(null);
@@ -40,6 +43,8 @@ export function CandidatesProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [initialized, setInitialized] = useState(false);
+  const [lastSync, setLastSync] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
   const loadingRef = useRef(false);
   const detailsLoadingRef = useRef<Set<string>>(new Set());
   const aiEvalLoadingRef = useRef<Set<string>>(new Set());
@@ -69,6 +74,7 @@ export function CandidatesProvider({ children }: { children: ReactNode }) {
       setCandidates(candidatesData.candidates || []);
       setJobOpenings(candidatesData.jobOpenings || []);
       setStatuses(statusesData.statuses || []);
+      setLastSync(candidatesData.lastSync || null);
       setInitialized(true);
 
       // Fetch cached AI evaluations in background (non-blocking)
@@ -170,6 +176,40 @@ export function CandidatesProvider({ children }: { children: ReactNode }) {
     }
   }, [aiEvaluations]);
 
+  // Sync candidates from BambooHR (incremental - only fetches new candidates)
+  const syncCandidates = useCallback(async (): Promise<{ newCount: number } | null> => {
+    setSyncing(true);
+    try {
+      const response = await fetch('/api/candidates?refresh=true');
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to sync candidates');
+      }
+
+      setCandidates(data.candidates || []);
+      setJobOpenings(data.jobOpenings || []);
+      setLastSync(data.lastSync || new Date().toISOString());
+
+      // Also refresh AI evaluations cache
+      fetch('/api/candidates/ai-evaluations/batch')
+        .then(res => res.json())
+        .then(evalData => {
+          if (evalData.evaluations) {
+            setAiEvaluations(evalData.evaluations);
+          }
+        })
+        .catch(err => console.error('Error refreshing AI evaluations:', err));
+
+      return { newCount: data.newCandidates || 0 };
+    } catch (err) {
+      console.error('Error syncing candidates:', err);
+      return null;
+    } finally {
+      setSyncing(false);
+    }
+  }, []);
+
   // Update candidate status
   const updateCandidateStatus = useCallback(async (
     candidateId: string,
@@ -223,12 +263,15 @@ export function CandidatesProvider({ children }: { children: ReactNode }) {
     error,
     initialized,
     aiEvaluationLoading,
+    lastSync,
+    syncing,
     setCandidates,
     fetchCandidateDetails,
     fetchAIEvaluation,
     updateCandidateStatus,
     refresh: loadData,
     ensureLoaded,
+    syncCandidates,
   };
 
   return (
