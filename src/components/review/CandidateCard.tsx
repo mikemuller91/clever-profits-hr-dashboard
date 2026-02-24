@@ -42,7 +42,7 @@ export default function CandidateCard({ candidate, aiEvaluation, aiLoading }: Ca
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-lg overflow-hidden h-full flex flex-col">
+    <div className="bg-white rounded-2xl shadow-lg overflow-hidden h-full flex flex-col relative">
       {/* Header with AI Score */}
       <div className="px-4 py-3 border-b border-gray-100">
         <div className="flex items-start gap-3">
@@ -144,37 +144,68 @@ export default function CandidateCard({ candidate, aiEvaluation, aiLoading }: Ca
         </div>
       )}
 
-      {/* Q&A Section (Collapsible) */}
+      {/* Q&A Button */}
       {candidate.questionsAndAnswers.length > 0 && (
         <div className="border-t border-gray-100">
           <button
-            onClick={() => setQaExpanded(!qaExpanded)}
+            onClick={() => setQaExpanded(true)}
             className="w-full px-3 py-2 flex items-center justify-between hover:bg-gray-50 transition-colors"
           >
             <span className="font-medium text-cp-dark text-xs">
               Q&A ({candidate.questionsAndAnswers.length})
             </span>
             <svg
-              className={`w-4 h-4 text-cp-gray transition-transform ${qaExpanded ? 'rotate-180' : ''}`}
+              className="w-4 h-4 text-cp-gray"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
             >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
             </svg>
           </button>
-          {qaExpanded && (
-            <div className="px-3 pb-3 max-h-48 overflow-y-auto">
-              <div className="space-y-2">
-                {candidate.questionsAndAnswers.map((qa, i) => (
-                  <div key={i} className="bg-gray-50 rounded p-2">
-                    <p className="text-xs font-medium text-cp-dark mb-0.5">{qa.question}</p>
-                    <p className="text-xs text-cp-gray">{qa.answer || 'No answer provided'}</p>
-                  </div>
-                ))}
-              </div>
+        </div>
+      )}
+
+      {/* Q&A Modal Overlay */}
+      {qaExpanded && candidate.questionsAndAnswers.length > 0 && (
+        <div className="absolute inset-0 bg-white rounded-2xl z-10 flex flex-col">
+          {/* Modal Header */}
+          <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between bg-white rounded-t-2xl">
+            <div>
+              <h3 className="font-semibold text-cp-dark">Application Q&A</h3>
+              <p className="text-xs text-cp-gray">{candidate.displayName}</p>
             </div>
-          )}
+            <button
+              onClick={() => setQaExpanded(false)}
+              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              <svg className="w-5 h-5 text-cp-gray" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+          {/* Modal Content - Scrollable */}
+          <div className="flex-1 overflow-y-auto p-4">
+            <div className="space-y-4">
+              {candidate.questionsAndAnswers.map((qa, i) => (
+                <div key={i} className="bg-gray-50 rounded-lg p-4">
+                  <p className="text-sm font-medium text-cp-dark mb-2">{qa.question}</p>
+                  <p className="text-sm text-cp-gray whitespace-pre-wrap">{qa.answer || 'No answer provided'}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Modal Footer */}
+          <div className="px-4 py-3 border-t border-gray-100 bg-white rounded-b-2xl">
+            <button
+              onClick={() => setQaExpanded(false)}
+              className="w-full py-2 bg-cp-blue text-white rounded-lg hover:bg-cp-dark transition-colors text-sm font-medium"
+            >
+              Back to Resume
+            </button>
+          </div>
         </div>
       )}
 
