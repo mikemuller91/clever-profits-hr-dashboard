@@ -12,9 +12,12 @@ export default function ReviewDashboard() {
     jobOpenings,
     statuses,
     candidateDetails,
+    aiEvaluations,
+    aiEvaluationLoading,
     loading,
     error,
     fetchCandidateDetails,
+    fetchAIEvaluation,
     updateCandidateStatus,
     ensureLoaded,
   } = useCandidates();
@@ -76,18 +79,29 @@ export default function ReviewDashboard() {
     return filtered;
   }, [candidates, selectedJobId, statusFilter, sortBy]);
 
-  // Preload current and next candidates
+  // Preload current and next candidates (details + AI evaluation)
   useEffect(() => {
     const current = reviewQueue[currentIndex];
     const next = reviewQueue[currentIndex + 1];
 
-    if (current && !candidateDetails[current.id]) {
-      fetchCandidateDetails(current.id);
+    if (current) {
+      if (!candidateDetails[current.id]) {
+        fetchCandidateDetails(current.id);
+      }
+      if (!aiEvaluations[current.id] && !aiEvaluationLoading[current.id]) {
+        fetchAIEvaluation(current.id);
+      }
     }
-    if (next && !candidateDetails[next.id]) {
-      fetchCandidateDetails(next.id);
+    if (next) {
+      if (!candidateDetails[next.id]) {
+        fetchCandidateDetails(next.id);
+      }
+      // Preload AI evaluation for next candidate too
+      if (!aiEvaluations[next.id] && !aiEvaluationLoading[next.id]) {
+        fetchAIEvaluation(next.id);
+      }
     }
-  }, [currentIndex, reviewQueue, candidateDetails, fetchCandidateDetails]);
+  }, [currentIndex, reviewQueue, candidateDetails, aiEvaluations, aiEvaluationLoading, fetchCandidateDetails, fetchAIEvaluation]);
 
   // Update candidate status
   const updateStatus = useCallback(async (candidateId: string, statusId: number, statusName: string) => {
@@ -327,8 +341,8 @@ export default function ReviewDashboard() {
                     {details ? (
                       <CandidateCard
                         candidate={details}
-                        rating={candidate.rating}
-                        ratingConfidence={candidate.ratingConfidence}
+                        aiEvaluation={aiEvaluations[candidate.id] || null}
+                        aiLoading={aiEvaluationLoading[candidate.id] || false}
                       />
                     ) : (
                       <div className="bg-white rounded-2xl shadow-lg h-full flex items-center justify-center">

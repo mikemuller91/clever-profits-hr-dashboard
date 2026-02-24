@@ -1,7 +1,7 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
-import { Candidate, CandidateDetail, JobOpening, CandidateStatus, CandidateRating } from '@/types/candidates';
+import { createContext, useContext, useState, useCallback, useRef, ReactNode } from 'react';
+import { Candidate, CandidateDetail, JobOpening, CandidateStatus, CandidateRating, AIEvaluation } from '@/types/candidates';
 
 interface CandidatesContextType {
   // Data
@@ -10,15 +10,18 @@ interface CandidatesContextType {
   statuses: CandidateStatus[];
   candidateDetails: Record<string, CandidateDetail>;
   candidateRatings: Record<string, CandidateRating>;
+  aiEvaluations: Record<string, AIEvaluation>;
 
   // State
   loading: boolean;
   error: string | null;
   initialized: boolean;
+  aiEvaluationLoading: Record<string, boolean>;
 
   // Actions
   setCandidates: React.Dispatch<React.SetStateAction<Candidate[]>>;
   fetchCandidateDetails: (candidateId: string) => Promise<CandidateDetail | null>;
+  fetchAIEvaluation: (candidateId: string) => Promise<AIEvaluation | null>;
   updateCandidateStatus: (candidateId: string, statusId: number, statusName: string) => Promise<boolean>;
   refresh: () => Promise<void>;
   ensureLoaded: () => Promise<void>;
@@ -32,11 +35,14 @@ export function CandidatesProvider({ children }: { children: ReactNode }) {
   const [statuses, setStatuses] = useState<CandidateStatus[]>([]);
   const [candidateDetails, setCandidateDetails] = useState<Record<string, CandidateDetail>>({});
   const [candidateRatings, setCandidateRatings] = useState<Record<string, CandidateRating>>({});
+  const [aiEvaluations, setAiEvaluations] = useState<Record<string, AIEvaluation>>({});
+  const [aiEvaluationLoading, setAiEvaluationLoading] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [initialized, setInitialized] = useState(false);
   const loadingRef = useRef(false);
   const detailsLoadingRef = useRef<Set<string>>(new Set());
+  const aiEvalLoadingRef = useRef<Set<string>>(new Set());
 
   const loadData = useCallback(async () => {
     // Prevent duplicate calls
@@ -113,6 +119,42 @@ export function CandidatesProvider({ children }: { children: ReactNode }) {
     }
   }, [candidateDetails]);
 
+  // Fetch AI evaluation (with caching and deduplication)
+  const fetchAIEvaluation = useCallback(async (candidateId: string): Promise<AIEvaluation | null> => {
+    // Return cached if available
+    if (aiEvaluations[candidateId]) {
+      return aiEvaluations[candidateId];
+    }
+
+    // Prevent duplicate requests
+    if (aiEvalLoadingRef.current.has(candidateId)) {
+      return null;
+    }
+
+    aiEvalLoadingRef.current.add(candidateId);
+    setAiEvaluationLoading(prev => ({ ...prev, [candidateId]: true }));
+
+    try {
+      const response = await fetch(`/api/candidates/${candidateId}/ai-evaluation`);
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to fetch AI evaluation');
+      }
+
+      const evaluation = await response.json();
+      setAiEvaluations(prev => ({ ...prev, [candidateId]: evaluation }));
+
+      return evaluation;
+    } catch (err) {
+      console.error('Error fetching AI evaluation:', err);
+      return null;
+    } finally {
+      aiEvalLoadingRef.current.delete(candidateId);
+      setAiEvaluationLoading(prev => ({ ...prev, [candidateId]: false }));
+    }
+  }, [aiEvaluations]);
+
   // Update candidate status
   const updateCandidateStatus = useCallback(async (
     candidateId: string,
@@ -161,11 +203,14 @@ export function CandidatesProvider({ children }: { children: ReactNode }) {
     statuses,
     candidateDetails,
     candidateRatings,
+    aiEvaluations,
     loading,
     error,
     initialized,
+    aiEvaluationLoading,
     setCandidates,
     fetchCandidateDetails,
+    fetchAIEvaluation,
     updateCandidateStatus,
     refresh: loadData,
     ensureLoaded,

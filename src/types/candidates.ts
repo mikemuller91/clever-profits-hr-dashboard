@@ -76,3 +76,11 @@ export interface CandidateRating {
   confidence: 'high' | 'medium' | 'low'; // Based on how much data was available
   dataSource: string[]; // What fields were used to calculate
 }
+
+export interface AIEvaluation {
+  score: number; // 1-10, relative to the job
+  summary: string; // 2-3 sentence summary
+  strengths: string[]; // Key strengths
+  concerns: string[]; // Concerns or gaps
+  generatedAt: string; // ISO timestamp
+}
