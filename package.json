@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
+    "@upstash/redis": "^1.36.2",
     "next": "^16.1.6",
     "react": "^18",
     "react-dom": "^18",

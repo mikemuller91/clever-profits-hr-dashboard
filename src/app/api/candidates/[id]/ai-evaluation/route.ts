@@ -1,13 +1,11 @@
 import { NextResponse } from 'next/server';
-import { evaluateCandidate, AIEvaluation } from '@/lib/ai-evaluation';
+import { evaluateCandidate } from '@/lib/ai-evaluation';
 import { extractPdfText } from '@/lib/pdf-extract';
+import { getCachedEvaluation, setCachedEvaluation } from '@/lib/ai-cache';
 
 const BAMBOO_API_KEY = process.env.BAMBOO_API_KEY;
 const BAMBOO_SUBDOMAIN = process.env.BAMBOO_SUBDOMAIN;
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
-
-// Simple in-memory cache for evaluations (in production, use Redis or a database)
-const evaluationCache = new Map<string, AIEvaluation>();
 
 function getAuthHeader(): string {
   const credentials = Buffer.from(`${BAMBOO_API_KEY}:x`).toString('base64');
@@ -34,8 +32,8 @@ export async function GET(
     );
   }
 
-  // Check cache first
-  const cached = evaluationCache.get(id);
+  // Check persistent cache first (Redis)
+  const cached = await getCachedEvaluation(id);
   if (cached) {
     return NextResponse.json(cached);
   }
@@ -115,8 +113,8 @@ export async function GET(
       candidateName,
     });
 
-    // Cache the result
-    evaluationCache.set(id, evaluation);
+    // Cache the result persistently in Redis
+    await setCachedEvaluation(id, evaluation);
 
     return NextResponse.json(evaluation);
   } catch (error) {
