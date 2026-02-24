@@ -1,15 +1,25 @@
 import { NextResponse } from 'next/server';
 import { Candidate, JobOpening } from '@/types/candidates';
+import { Redis } from '@upstash/redis';
 
 const BAMBOO_API_KEY = process.env.BAMBOO_API_KEY;
 const BAMBOO_SUBDOMAIN = process.env.BAMBOO_SUBDOMAIN;
+
+// Cache candidates list for 5 minutes to avoid repeated BambooHR API calls
+const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL || '',
+  token: process.env.UPSTASH_REDIS_REST_TOKEN || '',
+});
+
+const CACHE_KEY = 'candidates-list';
+const CACHE_TTL = 300; // 5 minutes
 
 function getAuthHeader(): string {
   const credentials = Buffer.from(`${BAMBOO_API_KEY}:x`).toString('base64');
   return `Basic ${credentials}`;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   if (!BAMBOO_API_KEY || !BAMBOO_SUBDOMAIN) {
     return NextResponse.json(
       { error: 'BambooHR credentials not configured.' },
@@ -17,7 +27,25 @@ export async function GET() {
     );
   }
 
+  // Check for force refresh parameter
+  const url = new URL(request.url);
+  const forceRefresh = url.searchParams.get('refresh') === 'true';
+
+  // Try to get cached data first (unless force refresh)
+  if (!forceRefresh && process.env.UPSTASH_REDIS_REST_URL) {
+    try {
+      const cached = await redis.get<{ candidates: Candidate[]; jobOpenings: JobOpening[]; totalFetched: number }>(CACHE_KEY);
+      if (cached) {
+        console.log('[Candidates API] Returning cached data');
+        return NextResponse.json({ ...cached, fromCache: true });
+      }
+    } catch (err) {
+      console.error('[Candidates API] Cache read error:', err);
+    }
+  }
+
   try {
+    const startTime = Date.now();
     const baseUrl = `https://api.bamboohr.com/api/gateway.php/${BAMBOO_SUBDOMAIN}/v1`;
 
     // Fetch all applications from ATS with pagination
@@ -118,11 +146,24 @@ export async function GET() {
       .map(([id, { title, count }]) => ({ id, title, candidateCount: count }))
       .sort((a, b) => b.candidateCount - a.candidateCount);
 
-    return NextResponse.json({
+    const result = {
       candidates,
       jobOpenings,
       totalFetched: allApplications.length,
-    });
+    };
+
+    // Cache the result
+    if (process.env.UPSTASH_REDIS_REST_URL) {
+      try {
+        await redis.set(CACHE_KEY, result, { ex: CACHE_TTL });
+        console.log(`[Candidates API] Cached ${candidates.length} candidates (TTL: ${CACHE_TTL}s)`);
+      } catch (err) {
+        console.error('[Candidates API] Cache write error:', err);
+      }
+    }
+
+    console.log(`[Candidates API] Fetched in ${Date.now() - startTime}ms`);
+    return NextResponse.json(result);
   } catch (error) {
     console.error('Error fetching candidates:', error);
     return NextResponse.json(
