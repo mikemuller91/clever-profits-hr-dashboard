@@ -36,6 +36,7 @@ export function CandidatesProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [initialized, setInitialized] = useState(false);
   const loadingRef = useRef(false);
+  const detailsLoadingRef = useRef<Set<string>>(new Set());
 
   const loadData = useCallback(async () => {
     // Prevent duplicate calls
@@ -77,18 +78,23 @@ export function CandidatesProvider({ children }: { children: ReactNode }) {
     }
   }, [initialized, loadData]);
 
-  // Fetch candidate details (with caching)
+  // Fetch candidate details (with caching and deduplication)
   const fetchCandidateDetails = useCallback(async (candidateId: string): Promise<CandidateDetail | null> => {
     // Return cached if available
     if (candidateDetails[candidateId]) {
       return candidateDetails[candidateId];
     }
 
+    // Prevent duplicate requests
+    if (detailsLoadingRef.current.has(candidateId)) {
+      return null;
+    }
+
+    detailsLoadingRef.current.add(candidateId);
+
     try {
-      const [detailsResponse, ratingResponse] = await Promise.all([
-        fetch(`/api/candidates/${candidateId}`),
-        fetch(`/api/candidates/${candidateId}/rating`),
-      ]);
+      // Fetch only the details - rating is already in the candidates list
+      const detailsResponse = await fetch(`/api/candidates/${candidateId}`);
 
       if (!detailsResponse.ok) {
         const data = await detailsResponse.json();
@@ -98,16 +104,12 @@ export function CandidatesProvider({ children }: { children: ReactNode }) {
       const detailsData = await detailsResponse.json();
       setCandidateDetails(prev => ({ ...prev, [candidateId]: detailsData }));
 
-      // Rating is optional
-      if (ratingResponse.ok) {
-        const ratingData = await ratingResponse.json();
-        setCandidateRatings(prev => ({ ...prev, [candidateId]: ratingData }));
-      }
-
       return detailsData;
     } catch (err) {
       console.error('Error fetching candidate details:', err);
       return null;
+    } finally {
+      detailsLoadingRef.current.delete(candidateId);
     }
   }, [candidateDetails]);
 

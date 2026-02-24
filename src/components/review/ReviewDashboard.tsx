@@ -22,7 +22,7 @@ export default function ReviewDashboard() {
   // UI state
   const [selectedJobId, setSelectedJobId] = useState<number | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('New');
-  const [sortBy, setSortBy] = useState<'oldest' | 'rating'>('oldest');
+  const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'rating'>('newest');
 
   // Review state
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -59,7 +59,11 @@ export default function ReviewDashboard() {
     }
 
     // Sort
-    if (sortBy === 'oldest') {
+    if (sortBy === 'newest') {
+      filtered = [...filtered].sort((a, b) =>
+        new Date(b.appliedDate).getTime() - new Date(a.appliedDate).getTime()
+      );
+    } else if (sortBy === 'oldest') {
       filtered = [...filtered].sort((a, b) =>
         new Date(a.appliedDate).getTime() - new Date(b.appliedDate).getTime()
       );
@@ -247,9 +251,10 @@ export default function ReviewDashboard() {
             <label className="text-sm font-medium text-cp-gray">Sort:</label>
             <select
               value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as 'oldest' | 'rating')}
+              onChange={(e) => setSortBy(e.target.value as 'newest' | 'oldest' | 'rating')}
               className="px-3 py-1.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-cp-blue focus:border-transparent outline-none bg-white text-sm"
             >
+              <option value="newest">Newest First</option>
               <option value="oldest">Oldest First</option>
               <option value="rating">Highest Rating</option>
             </select>
