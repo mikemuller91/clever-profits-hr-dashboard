@@ -8,6 +8,7 @@ import { ReactNode } from 'react';
 const tabs = [
   { name: 'Employees', href: '/' },
   { name: 'Candidates', href: '/candidates' },
+  { name: 'Review', href: '/review' },
   { name: 'Anniversaries', href: '/anniversaries' },
 ];
 
