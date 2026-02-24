@@ -205,25 +205,33 @@ export default function ReviewDashboard() {
         </div>
       )}
 
-      {/* Job Selection */}
-      <div className="bg-white rounded-xl p-6 shadow-sm">
-        <h2 className="text-lg font-semibold text-cp-dark mb-4">
-          {selectedJob ? `Reviewing: ${selectedJob.title}` : 'Select a Job Opening to Review'}
-        </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+      {/* Job Selection - Compact */}
+      <div className="bg-white rounded-lg p-3 shadow-sm">
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-sm font-semibold text-cp-dark">
+            {selectedJob ? `Reviewing: ${selectedJob.title}` : 'Select a Job Opening'}
+          </h2>
+          {selectedJob && (
+            <button
+              onClick={() => setSelectedJobId(null)}
+              className="text-xs text-cp-blue hover:underline"
+            >
+              Change
+            </button>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-2">
           {jobOpenings.map((job) => (
             <button
               key={job.id}
               onClick={() => setSelectedJobId(selectedJobId === job.id ? null : job.id)}
-              className={`bg-white rounded-xl p-4 shadow-sm border-l-4 text-left transition-all hover:shadow-md ${
+              className={`px-3 py-1.5 rounded-lg text-xs transition-all ${
                 selectedJobId === job.id
-                  ? 'border-cp-blue ring-2 ring-cp-blue/20'
-                  : 'border-cp-cyan hover:border-cp-blue'
+                  ? 'bg-cp-blue text-white'
+                  : 'bg-gray-100 text-cp-dark hover:bg-gray-200'
               }`}
             >
-              <p className="font-medium text-cp-dark text-sm line-clamp-2">{job.title}</p>
-              <p className="text-2xl font-bold text-cp-dark mt-2">{job.candidateCount}</p>
-              <p className="text-xs text-cp-gray">applicants</p>
+              {job.title} <span className="font-semibold">({job.candidateCount})</span>
             </button>
           ))}
         </div>
@@ -277,7 +285,7 @@ export default function ReviewDashboard() {
       {selectedJobId !== null && (
         <div className="flex flex-col items-center">
           {/* Card Stack */}
-          <div className="relative w-full max-w-lg h-[600px]">
+          <div className="relative w-full max-w-3xl h-[calc(100vh-280px)] min-h-[500px]">
             {remainingCount === 0 ? (
               <div className="absolute inset-0 flex items-center justify-center">
                 <div className="text-center">
