@@ -4,7 +4,6 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { ReactNode } from 'react';
-import { CandidatesProvider } from '@/context/CandidatesContext';
 
 const tabs = [
   { name: 'Employees', href: '/' },
@@ -79,9 +78,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
       {/* Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-8 py-8">
-        <CandidatesProvider>
-          {children}
-        </CandidatesProvider>
+        {children}
       </main>
 
       {/* Footer */}
