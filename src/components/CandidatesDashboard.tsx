@@ -12,7 +12,6 @@ export default function CandidatesDashboard() {
     jobOpenings,
     statuses: availableStatuses,
     candidateDetails,
-    candidateRatings,
     aiEvaluations,
     aiEvaluationLoading,
     loading,
@@ -120,10 +119,10 @@ export default function CandidatesDashboard() {
       result = result.filter(c => c.status === statusFilter);
     }
 
-    // Filter by rating
+    // Filter by AI rating
     if (ratingFilter !== 'all') {
       const minRating = parseInt(ratingFilter, 10);
-      result = result.filter(c => c.rating !== null && c.rating >= minRating);
+      result = result.filter(c => aiEvaluations[c.id] && aiEvaluations[c.id].score >= minRating);
     }
 
     // Filter by university
@@ -158,7 +157,7 @@ export default function CandidatesDashboard() {
     });
 
     return result;
-  }, [candidates, selectedJobId, statusFilter, ratingFilter, universityFilter, searchTerm, sortColumn, sortDirection]);
+  }, [candidates, selectedJobId, statusFilter, ratingFilter, universityFilter, searchTerm, sortColumn, sortDirection, aiEvaluations]);
 
   const selectedJob = jobOpenings.find(j => j.id === selectedJobId);
 
@@ -191,13 +190,6 @@ export default function CandidatesDashboard() {
     if (s.includes('reject') || s.includes('declined') || s.includes('withdrew')) return 'bg-red-100 text-red-800';
     if (s.includes('offer')) return 'bg-purple-100 text-purple-800';
     return 'bg-gray-100 text-gray-800';
-  };
-
-  const getRatingColor = (rating: number) => {
-    if (rating >= 8) return 'text-green-600 bg-green-100';
-    if (rating >= 6) return 'text-blue-600 bg-blue-100';
-    if (rating >= 4) return 'text-yellow-600 bg-yellow-100';
-    return 'text-gray-600 bg-gray-100';
   };
 
   const getAIScoreColor = (score: number) => {
@@ -495,17 +487,17 @@ export default function CandidatesDashboard() {
               </div>
 
               <div className="min-w-[160px]">
-                <label className="block text-sm font-medium text-cp-gray mb-1">Min Rating</label>
+                <label className="block text-sm font-medium text-cp-gray mb-1">Min AI Score</label>
                 <select
                   value={ratingFilter}
                   onChange={(e) => setRatingFilter(e.target.value)}
                   className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-cp-blue focus:border-transparent outline-none bg-white"
                 >
-                  <option value="all">All Ratings</option>
+                  <option value="all">All Scores</option>
                   <option value="8">8+ (Excellent)</option>
                   <option value="6">6+ (Good)</option>
                   <option value="4">4+ (Fair)</option>
-                  <option value="1">1+ (Any rated)</option>
+                  <option value="1">1+ (Any scored)</option>
                 </select>
               </div>
 
@@ -748,7 +740,7 @@ export default function CandidatesDashboard() {
                     </th>
                     {[
                       { key: 'displayName', label: 'Candidate' },
-                      { key: 'rating', label: 'Rating' },
+                      { key: 'rating', label: 'AI Score' },
                       { key: 'status', label: 'Status' },
                       { key: 'appliedDate', label: 'Applied Date' },
                       { key: 'source', label: 'Source' },
@@ -814,17 +806,8 @@ export default function CandidatesDashboard() {
                               <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
                                 <div className="animate-spin rounded-full h-4 w-4 border-2 border-cp-blue border-t-transparent"></div>
                               </div>
-                            ) : candidate.rating !== null ? (
-                              <div className="flex items-center gap-2">
-                                <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full text-sm font-bold ${getRatingColor(candidate.rating)}`}>
-                                  {candidate.rating}
-                                </span>
-                                {candidate.ratingConfidence === 'low' && (
-                                  <span className="text-xs text-yellow-600" title="Limited data available">?</span>
-                                )}
-                              </div>
                             ) : (
-                              <span className="text-cp-gray text-sm">-</span>
+                              <span className="text-cp-gray text-sm" title="Click View Details to generate AI rating">—</span>
                             )}
                           </td>
                           <td className="py-4 px-6">

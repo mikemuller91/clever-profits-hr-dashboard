@@ -53,13 +53,15 @@ export function CandidatesProvider({ children }: { children: ReactNode }) {
       setLoading(true);
       setError(null);
 
-      const [candidatesRes, statusesRes] = await Promise.all([
+      const [candidatesRes, statusesRes, cachedEvaluationsRes] = await Promise.all([
         fetch('/api/candidates'),
         fetch('/api/candidates/statuses'),
+        fetch('/api/candidates/ai-evaluations/batch'),
       ]);
 
       const candidatesData = await candidatesRes.json();
       const statusesData = await statusesRes.json();
+      const cachedEvaluationsData = await cachedEvaluationsRes.json();
 
       if (!candidatesRes.ok) {
         throw new Error(candidatesData.error || 'Failed to fetch candidates');
@@ -68,6 +70,13 @@ export function CandidatesProvider({ children }: { children: ReactNode }) {
       setCandidates(candidatesData.candidates || []);
       setJobOpenings(candidatesData.jobOpenings || []);
       setStatuses(statusesData.statuses || []);
+
+      // Pre-load cached AI evaluations
+      if (cachedEvaluationsData.evaluations) {
+        setAiEvaluations(cachedEvaluationsData.evaluations);
+        console.log(`[CandidatesContext] Loaded ${Object.keys(cachedEvaluationsData.evaluations).length} cached AI evaluations`);
+      }
+
       setInitialized(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
