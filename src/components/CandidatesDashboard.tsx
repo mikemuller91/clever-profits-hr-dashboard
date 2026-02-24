@@ -1,25 +1,35 @@
 'use client';
 
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { Candidate, CandidateDetail, JobOpening, CandidateStatus, CandidateRating } from '@/types/candidates';
+import { Candidate } from '@/types/candidates';
+import { useCandidates } from '@/context/CandidatesContext';
 
 export default function CandidatesDashboard() {
-  const [candidates, setCandidates] = useState<Candidate[]>([]);
-  const [jobOpenings, setJobOpenings] = useState<JobOpening[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // Shared context for candidates data
+  const {
+    candidates,
+    setCandidates,
+    jobOpenings,
+    statuses: availableStatuses,
+    candidateDetails,
+    candidateRatings,
+    loading,
+    error,
+    fetchCandidateDetails: contextFetchDetails,
+    updateCandidateStatus,
+    ensureLoaded,
+  } = useCandidates();
+
+  // Local UI state
   const [selectedJobId, setSelectedJobId] = useState<number | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [ratingFilter, setRatingFilter] = useState<string>('all');
   const [universityFilter, setUniversityFilter] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedCandidate, setExpandedCandidate] = useState<string | null>(null);
-  const [candidateDetails, setCandidateDetails] = useState<Record<string, CandidateDetail>>({});
-  const [candidateRatings, setCandidateRatings] = useState<Record<string, CandidateRating>>({});
   const [loadingDetails, setLoadingDetails] = useState<string | null>(null);
   const [sortColumn, setSortColumn] = useState<keyof Candidate>('appliedDate');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
-  const [availableStatuses, setAvailableStatuses] = useState<CandidateStatus[]>([]);
   const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
   const [statusDropdownOpen, setStatusDropdownOpen] = useState<string | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
@@ -77,45 +87,10 @@ export default function CandidatesDashboard() {
     setSelectedCandidates(new Set());
   }, [selectedJobId]);
 
-  // Fetch available statuses on mount
+  // Load data from shared context on mount
   useEffect(() => {
-    async function loadStatuses() {
-      try {
-        const response = await fetch('/api/candidates/statuses');
-        const data = await response.json();
-        if (response.ok && data.statuses) {
-          setAvailableStatuses(data.statuses);
-        }
-      } catch (err) {
-        console.error('Error fetching statuses:', err);
-      }
-    }
-    loadStatuses();
-  }, []);
-
-  useEffect(() => {
-    async function loadCandidates() {
-      try {
-        setLoading(true);
-        const response = await fetch('/api/candidates');
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(data.error || 'Failed to fetch candidates');
-        }
-
-        setCandidates(data.candidates || []);
-        setJobOpenings(data.jobOpenings || []);
-        setError(null);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'An error occurred');
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    loadCandidates();
-  }, []);
+    ensureLoaded();
+  }, [ensureLoaded]);
 
   // Get unique statuses for filter
   const statuses = useMemo(() => {
@@ -239,25 +214,7 @@ export default function CandidatesDashboard() {
 
     setLoadingDetails(candidateId);
     try {
-      // Fetch details and rating in parallel
-      const [detailsResponse, ratingResponse] = await Promise.all([
-        fetch(`/api/candidates/${candidateId}`),
-        fetch(`/api/candidates/${candidateId}/rating`),
-      ]);
-
-      const detailsData = await detailsResponse.json();
-      if (!detailsResponse.ok) {
-        throw new Error(detailsData.error || 'Failed to fetch candidate details');
-      }
-
-      setCandidateDetails(prev => ({ ...prev, [candidateId]: detailsData }));
-
-      // Rating is optional - don't fail if it errors
-      if (ratingResponse.ok) {
-        const ratingData = await ratingResponse.json();
-        setCandidateRatings(prev => ({ ...prev, [candidateId]: ratingData }));
-      }
-
+      await contextFetchDetails(candidateId);
       setExpandedCandidate(candidateId);
     } catch (err) {
       console.error('Error fetching candidate details:', err);
@@ -272,32 +229,9 @@ export default function CandidatesDashboard() {
     setStatusDropdownOpen(null);
 
     try {
-      const response = await fetch(`/api/candidates/${candidateId}/status`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ statusId: newStatusId }),
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to update status');
-      }
-
-      // Update local state
-      setCandidates(prev =>
-        prev.map(c =>
-          c.id === candidateId
-            ? { ...c, status: newStatusName, statusId: newStatusId }
-            : c
-        )
-      );
-
-      // Also update candidate details if loaded
-      if (candidateDetails[candidateId]) {
-        setCandidateDetails(prev => ({
-          ...prev,
-          [candidateId]: { ...prev[candidateId], status: newStatusName, statusId: newStatusId },
-        }));
+      const success = await updateCandidateStatus(candidateId, newStatusId, newStatusName);
+      if (!success) {
+        throw new Error('Failed to update status');
       }
     } catch (err) {
       console.error('Error updating status:', err);

@@ -1,20 +1,25 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Candidate, CandidateDetail, JobOpening, CandidateStatus } from '@/types/candidates';
 import SwipeCard from './SwipeCard';
 import CandidateCard from './CandidateCard';
+import { useCandidates } from '@/context/CandidatesContext';
 
 export default function ReviewDashboard() {
-  // Data state
-  const [candidates, setCandidates] = useState<Candidate[]>([]);
-  const [jobOpenings, setJobOpenings] = useState<JobOpening[]>([]);
-  const [statuses, setStatuses] = useState<CandidateStatus[]>([]);
-  const [candidateDetails, setCandidateDetails] = useState<Record<string, CandidateDetail>>({});
+  // Shared context for candidates data
+  const {
+    candidates,
+    jobOpenings,
+    statuses,
+    candidateDetails,
+    loading,
+    error,
+    fetchCandidateDetails,
+    updateCandidateStatus,
+    ensureLoaded,
+  } = useCandidates();
 
   // UI state
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [selectedJobId, setSelectedJobId] = useState<number | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('New');
   const [sortBy, setSortBy] = useState<'oldest' | 'rating'>('oldest');
@@ -25,6 +30,11 @@ export default function ReviewDashboard() {
   const [isAnimating, setIsAnimating] = useState(false);
   const [statusUpdateError, setStatusUpdateError] = useState<string | null>(null);
 
+  // Load data from shared context on mount
+  useEffect(() => {
+    ensureLoaded();
+  }, [ensureLoaded]);
+
   // Get status IDs
   const notQualifiedStatusId = useMemo(() => {
     return statuses.find(s => s.name === 'Not Qualified')?.id || null;
@@ -33,38 +43,6 @@ export default function ReviewDashboard() {
   const reviewedStatusId = useMemo(() => {
     return statuses.find(s => s.name === 'Reviewed')?.id || null;
   }, [statuses]);
-
-  // Fetch initial data
-  useEffect(() => {
-    async function loadData() {
-      try {
-        setLoading(true);
-
-        const [candidatesRes, statusesRes] = await Promise.all([
-          fetch('/api/candidates'),
-          fetch('/api/candidates/statuses'),
-        ]);
-
-        const candidatesData = await candidatesRes.json();
-        const statusesData = await statusesRes.json();
-
-        if (!candidatesRes.ok) {
-          throw new Error(candidatesData.error || 'Failed to fetch candidates');
-        }
-
-        setCandidates(candidatesData.candidates || []);
-        setJobOpenings(candidatesData.jobOpenings || []);
-        setStatuses(statusesData.statuses || []);
-        setError(null);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'An error occurred');
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    loadData();
-  }, []);
 
   // Filter and sort candidates for the queue
   const reviewQueue = useMemo(() => {
@@ -94,53 +72,26 @@ export default function ReviewDashboard() {
     return filtered;
   }, [candidates, selectedJobId, statusFilter, sortBy]);
 
-  // Preload candidate details
-  const preloadDetails = useCallback(async (candidateId: string) => {
-    if (candidateDetails[candidateId]) return;
-
-    try {
-      const response = await fetch(`/api/candidates/${candidateId}`);
-      if (response.ok) {
-        const data = await response.json();
-        setCandidateDetails(prev => ({ ...prev, [candidateId]: data }));
-      }
-    } catch (err) {
-      console.error('Error preloading candidate details:', err);
-    }
-  }, [candidateDetails]);
-
   // Preload current and next candidates
   useEffect(() => {
     const current = reviewQueue[currentIndex];
     const next = reviewQueue[currentIndex + 1];
 
-    if (current) preloadDetails(current.id);
-    if (next) preloadDetails(next.id);
-  }, [currentIndex, reviewQueue, preloadDetails]);
+    if (current && !candidateDetails[current.id]) {
+      fetchCandidateDetails(current.id);
+    }
+    if (next && !candidateDetails[next.id]) {
+      fetchCandidateDetails(next.id);
+    }
+  }, [currentIndex, reviewQueue, candidateDetails, fetchCandidateDetails]);
 
   // Update candidate status
   const updateStatus = useCallback(async (candidateId: string, statusId: number, statusName: string) => {
     try {
-      const response = await fetch(`/api/candidates/${candidateId}/status`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ statusId }),
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to update status');
+      const success = await updateCandidateStatus(candidateId, statusId, statusName);
+      if (!success) {
+        throw new Error('Failed to update status');
       }
-
-      // Update local state
-      setCandidates(prev =>
-        prev.map(c =>
-          c.id === candidateId
-            ? { ...c, status: statusName, statusId }
-            : c
-        )
-      );
-
       return true;
     } catch (err) {
       console.error('Error updating status:', err);
@@ -148,7 +99,7 @@ export default function ReviewDashboard() {
       setTimeout(() => setStatusUpdateError(null), 5000);
       return false;
     }
-  }, []);
+  }, [updateCandidateStatus]);
 
   // Handle swipe left (Not Qualified)
   const handleSwipeLeft = useCallback(async () => {
