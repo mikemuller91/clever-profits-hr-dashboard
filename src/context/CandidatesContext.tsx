@@ -53,15 +53,14 @@ export function CandidatesProvider({ children }: { children: ReactNode }) {
       setLoading(true);
       setError(null);
 
-      const [candidatesRes, statusesRes, cachedEvaluationsRes] = await Promise.all([
+      // Fetch candidates and statuses first (critical)
+      const [candidatesRes, statusesRes] = await Promise.all([
         fetch('/api/candidates'),
         fetch('/api/candidates/statuses'),
-        fetch('/api/candidates/ai-evaluations/batch'),
       ]);
 
       const candidatesData = await candidatesRes.json();
       const statusesData = await statusesRes.json();
-      const cachedEvaluationsData = await cachedEvaluationsRes.json();
 
       if (!candidatesRes.ok) {
         throw new Error(candidatesData.error || 'Failed to fetch candidates');
@@ -70,14 +69,21 @@ export function CandidatesProvider({ children }: { children: ReactNode }) {
       setCandidates(candidatesData.candidates || []);
       setJobOpenings(candidatesData.jobOpenings || []);
       setStatuses(statusesData.statuses || []);
-
-      // Pre-load cached AI evaluations
-      if (cachedEvaluationsData.evaluations) {
-        setAiEvaluations(cachedEvaluationsData.evaluations);
-        console.log(`[CandidatesContext] Loaded ${Object.keys(cachedEvaluationsData.evaluations).length} cached AI evaluations`);
-      }
-
       setInitialized(true);
+
+      // Fetch cached AI evaluations in background (non-blocking)
+      fetch('/api/candidates/ai-evaluations/batch')
+        .then(res => res.json())
+        .then(data => {
+          if (data.evaluations) {
+            setAiEvaluations(data.evaluations);
+            console.log(`[CandidatesContext] Loaded ${Object.keys(data.evaluations).length} cached AI evaluations`);
+          }
+        })
+        .catch(err => {
+          console.error('[CandidatesContext] Failed to load cached AI evaluations:', err);
+        });
+
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
