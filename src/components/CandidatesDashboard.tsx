@@ -13,9 +13,12 @@ export default function CandidatesDashboard() {
     statuses: availableStatuses,
     candidateDetails,
     candidateRatings,
+    aiEvaluations,
+    aiEvaluationLoading,
     loading,
     error,
     fetchCandidateDetails: contextFetchDetails,
+    fetchAIEvaluation,
     updateCandidateStatus,
     ensureLoaded,
   } = useCandidates();
@@ -197,6 +200,13 @@ export default function CandidatesDashboard() {
     return 'text-gray-600 bg-gray-100';
   };
 
+  const getAIScoreColor = (score: number) => {
+    if (score >= 8) return 'text-green-600 bg-green-100 ring-green-200';
+    if (score >= 6) return 'text-blue-600 bg-blue-100 ring-blue-200';
+    if (score >= 4) return 'text-yellow-600 bg-yellow-100 ring-yellow-200';
+    return 'text-red-600 bg-red-100 ring-red-200';
+  };
+
   const getConfidenceLabel = (confidence: 'high' | 'medium' | 'low') => {
     switch (confidence) {
       case 'high': return { text: 'High confidence', color: 'text-green-600' };
@@ -209,6 +219,10 @@ export default function CandidatesDashboard() {
     if (candidateDetails[candidateId]) {
       // Already loaded, just toggle expansion
       setExpandedCandidate(expandedCandidate === candidateId ? null : candidateId);
+      // Still fetch AI evaluation if not loaded
+      if (!aiEvaluations[candidateId] && !aiEvaluationLoading[candidateId]) {
+        fetchAIEvaluation(candidateId);
+      }
       return;
     }
 
@@ -216,6 +230,8 @@ export default function CandidatesDashboard() {
     try {
       await contextFetchDetails(candidateId);
       setExpandedCandidate(candidateId);
+      // Fetch AI evaluation in parallel
+      fetchAIEvaluation(candidateId);
     } catch (err) {
       console.error('Error fetching candidate details:', err);
     } finally {
@@ -415,35 +431,33 @@ export default function CandidatesDashboard() {
         </div>
       )}
 
-      {/* Job Openings Cards */}
-      <div className="mb-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold text-cp-dark">
+      {/* Job Openings - Compact */}
+      <div className="bg-white rounded-lg p-3 shadow-sm mb-6">
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-sm font-semibold text-cp-dark">
             {selectedJob ? `Applicants for: ${selectedJob.title}` : 'Select a Job Opening'}
           </h2>
           {selectedJobId !== null && (
             <button
               onClick={() => setSelectedJobId(null)}
-              className="text-cp-blue hover:text-cp-dark transition-colors text-sm"
+              className="text-xs text-cp-blue hover:underline"
             >
-              View All Jobs
+              Change
             </button>
           )}
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <div className="flex flex-wrap gap-2">
           {jobOpenings.map((job) => (
             <button
               key={job.id}
               onClick={() => setSelectedJobId(selectedJobId === job.id ? null : job.id)}
-              className={`bg-white rounded-xl p-4 shadow-sm border-l-4 text-left transition-all hover:shadow-md ${
+              className={`px-3 py-1.5 rounded-lg text-xs transition-all ${
                 selectedJobId === job.id
-                  ? 'border-cp-blue ring-2 ring-cp-blue/20'
-                  : 'border-cp-cyan hover:border-cp-blue'
+                  ? 'bg-cp-blue text-white'
+                  : 'bg-gray-100 text-cp-dark hover:bg-gray-200'
               }`}
             >
-              <p className="font-medium text-cp-dark text-sm line-clamp-2">{job.title}</p>
-              <p className="text-2xl font-bold text-cp-dark mt-2">{job.candidateCount}</p>
-              <p className="text-xs text-cp-gray">applicants</p>
+              {job.title} <span className="font-semibold">({job.candidateCount})</span>
             </button>
           ))}
         </div>
@@ -791,7 +805,16 @@ export default function CandidatesDashboard() {
                             </div>
                           </td>
                           <td className="py-4 px-6">
-                            {candidate.rating !== null ? (
+                            {aiEvaluations[candidate.id] ? (
+                              <div className={`inline-flex flex-col items-center justify-center w-10 h-10 rounded-lg ring-1 ${getAIScoreColor(aiEvaluations[candidate.id].score)}`}>
+                                <span className="text-lg font-bold">{aiEvaluations[candidate.id].score}</span>
+                                <span className="text-[8px] opacity-70">/10</span>
+                              </div>
+                            ) : aiEvaluationLoading[candidate.id] ? (
+                              <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
+                                <div className="animate-spin rounded-full h-4 w-4 border-2 border-cp-blue border-t-transparent"></div>
+                              </div>
+                            ) : candidate.rating !== null ? (
                               <div className="flex items-center gap-2">
                                 <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full text-sm font-bold ${getRatingColor(candidate.rating)}`}>
                                   {candidate.rating}
@@ -871,71 +894,52 @@ export default function CandidatesDashboard() {
                           <tr key={`${candidate.id}-details`} className="bg-cp-light/30">
                             <td colSpan={7} className="py-4 px-6">
                               <div className="space-y-4">
-                                {/* AI Rating */}
-                                {candidateRatings[candidate.id] && (
+                                {/* AI Evaluation */}
+                                {aiEvaluations[candidate.id] ? (
                                   <div className="bg-gradient-to-r from-cp-blue/10 to-cp-cyan/10 rounded-lg p-4 border border-cp-blue/20">
-                                    <div className="flex items-center justify-between mb-3">
-                                      <h4 className="font-medium text-cp-dark flex items-center gap-2">
-                                        <svg className="w-5 h-5 text-cp-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                                        </svg>
-                                        AI Rating
-                                      </h4>
-                                      <span className={`text-xs px-2 py-1 rounded ${getConfidenceLabel(candidateRatings[candidate.id].confidence).color}`}>
-                                        {getConfidenceLabel(candidateRatings[candidate.id].confidence).text}
-                                      </span>
-                                    </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                      {/* Overall Score */}
-                                      <div className="bg-white rounded-lg p-3 shadow-sm text-center">
-                                        <p className="text-xs text-cp-gray uppercase tracking-wide mb-1">Overall Score</p>
-                                        <div className={`inline-flex items-center justify-center w-14 h-14 rounded-full text-2xl font-bold ${getRatingColor(candidateRatings[candidate.id].overall)}`}>
-                                          {candidateRatings[candidate.id].overall}
+                                    <div className="flex items-start gap-4">
+                                      {/* Score */}
+                                      <div className={`flex-shrink-0 w-16 h-16 rounded-xl flex flex-col items-center justify-center ring-2 ${getAIScoreColor(aiEvaluations[candidate.id].score)}`}>
+                                        <span className="text-2xl font-bold">{aiEvaluations[candidate.id].score}</span>
+                                        <span className="text-[10px] opacity-70">/10</span>
+                                      </div>
+                                      {/* Summary */}
+                                      <div className="flex-1">
+                                        <h4 className="font-medium text-cp-dark flex items-center gap-2 mb-2">
+                                          <svg className="w-5 h-5 text-cp-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                                          </svg>
+                                          AI Evaluation
+                                        </h4>
+                                        <p className="text-sm text-cp-dark leading-relaxed">{aiEvaluations[candidate.id].summary}</p>
+                                        {/* Strengths & Concerns */}
+                                        <div className="mt-3 flex flex-wrap gap-1.5">
+                                          {aiEvaluations[candidate.id].strengths.map((strength, i) => (
+                                            <span key={`s-${i}`} className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">
+                                              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                              </svg>
+                                              {strength}
+                                            </span>
+                                          ))}
+                                          {aiEvaluations[candidate.id].concerns.map((concern, i) => (
+                                            <span key={`c-${i}`} className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-xs">
+                                              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                              </svg>
+                                              {concern}
+                                            </span>
+                                          ))}
                                         </div>
-                                        <p className="text-xs text-cp-gray mt-1">out of 10</p>
-                                      </div>
-                                      {/* Education Score */}
-                                      <div className="bg-white rounded-lg p-3 shadow-sm">
-                                        <p className="text-xs text-cp-gray uppercase tracking-wide">Education</p>
-                                        <p className={`text-xl font-bold ${getRatingColor(candidateRatings[candidate.id].breakdown.education.score)}`}>
-                                          {candidateRatings[candidate.id].breakdown.education.score}/10
-                                        </p>
-                                        {candidateRatings[candidate.id].breakdown.education.level && (
-                                          <p className="text-xs text-cp-gray mt-1 capitalize">
-                                            {candidateRatings[candidate.id].breakdown.education.level}
-                                          </p>
-                                        )}
-                                        {candidateRatings[candidate.id].breakdown.education.institution && (
-                                          <p className="text-xs text-cp-blue mt-0.5 capitalize truncate">
-                                            {candidateRatings[candidate.id].breakdown.education.institution}
-                                          </p>
-                                        )}
-                                      </div>
-                                      {/* Experience Score */}
-                                      <div className="bg-white rounded-lg p-3 shadow-sm">
-                                        <p className="text-xs text-cp-gray uppercase tracking-wide">Experience</p>
-                                        <p className={`text-xl font-bold ${getRatingColor(candidateRatings[candidate.id].breakdown.experience.score)}`}>
-                                          {candidateRatings[candidate.id].breakdown.experience.score}/10
-                                        </p>
-                                        {candidateRatings[candidate.id].breakdown.experience.years !== null && (
-                                          <p className="text-xs text-cp-gray mt-1">
-                                            {candidateRatings[candidate.id].breakdown.experience.years} years
-                                          </p>
-                                        )}
                                       </div>
                                     </div>
-                                    {candidateRatings[candidate.id].dataSource.length > 0 && (
-                                      <p className="text-xs text-cp-gray mt-3">
-                                        Data sources: {candidateRatings[candidate.id].dataSource.join(', ')}
-                                      </p>
-                                    )}
-                                    {candidateRatings[candidate.id].confidence === 'low' && (
-                                      <p className="text-xs text-yellow-600 mt-2">
-                                        Limited data available. Add application questions about education and experience for better ratings.
-                                      </p>
-                                    )}
                                   </div>
-                                )}
+                                ) : aiEvaluationLoading[candidate.id] ? (
+                                  <div className="bg-gray-50 rounded-lg p-4 border border-gray-100 flex items-center gap-3">
+                                    <div className="animate-spin rounded-full h-5 w-5 border-2 border-cp-blue border-t-transparent"></div>
+                                    <span className="text-sm text-cp-gray">Generating AI evaluation...</span>
+                                  </div>
+                                ) : null}
 
                                 {/* Contact & Additional Info */}
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
