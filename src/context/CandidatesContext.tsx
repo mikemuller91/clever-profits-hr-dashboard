@@ -207,19 +207,27 @@ export function CandidatesProvider({ children }: { children: ReactNode }) {
         .catch(err => console.error('Error refreshing AI evaluations:', err));
 
       // Automatically trigger AI evaluation for NEW candidates (in background)
+      // Rate limited to ~4 per minute to stay under API limits
       if (newCandidateIds.length > 0) {
-        console.log(`[CandidatesContext] Triggering AI evaluation for ${newCandidateIds.length} new candidates`);
+        console.log(`[CandidatesContext] Queuing AI evaluation for ${newCandidateIds.length} new candidates (rate limited)`);
 
-        // Process new candidates one at a time to avoid overwhelming the API
-        for (const candidateId of newCandidateIds) {
-          // Don't await - let them run in background
-          fetchAIEvaluation(candidateId).catch(err => {
-            console.error(`Error evaluating new candidate ${candidateId}:`, err);
-          });
+        // Process in background - don't block the sync
+        (async () => {
+          for (const candidateId of newCandidateIds) {
+            try {
+              await fetchAIEvaluation(candidateId);
+              console.log(`[CandidatesContext] AI evaluation complete for ${candidateId}`);
+            } catch (err) {
+              console.error(`Error evaluating new candidate ${candidateId}:`, err);
+            }
 
-          // Small delay between requests to avoid rate limiting
-          await new Promise(resolve => setTimeout(resolve, 500));
-        }
+            // Wait 15 seconds between requests to stay under 5/min rate limit
+            if (newCandidateIds.indexOf(candidateId) < newCandidateIds.length - 1) {
+              await new Promise(resolve => setTimeout(resolve, 15000));
+            }
+          }
+          console.log(`[CandidatesContext] All ${newCandidateIds.length} AI evaluations complete`);
+        })();
       }
 
       return { newCount, newCandidateIds };

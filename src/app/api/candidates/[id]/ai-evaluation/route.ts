@@ -105,13 +105,47 @@ export async function GET(
       }
     }
 
-    // Call AI evaluation
-    const evaluation = await evaluateCandidate({
-      jobTitle,
-      resumeText,
-      questionsAndAnswers,
-      candidateName,
-    });
+    // Call AI evaluation with retry for rate limits
+    let evaluation;
+    let lastError;
+
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        evaluation = await evaluateCandidate({
+          jobTitle,
+          resumeText,
+          questionsAndAnswers,
+          candidateName,
+        });
+        break; // Success, exit retry loop
+      } catch (err) {
+        lastError = err;
+        const errorMessage = err instanceof Error ? err.message : '';
+
+        if (errorMessage.includes('429') || errorMessage.includes('rate_limit')) {
+          // Rate limited - wait and retry
+          const waitTime = Math.pow(2, attempt + 1) * 15000; // 30s, 60s, 120s
+          console.log(`[AI Evaluation] Rate limited, waiting ${waitTime / 1000}s before retry ${attempt + 1}/3`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+        } else {
+          // Other error - don't retry
+          throw err;
+        }
+      }
+    }
+
+    if (!evaluation) {
+      const errorMessage = lastError instanceof Error ? lastError.message : 'AI evaluation failed';
+      const isRateLimit = errorMessage.includes('429') || errorMessage.includes('rate_limit');
+
+      return NextResponse.json(
+        {
+          error: isRateLimit ? 'Rate limited - please try again in a few minutes' : errorMessage,
+          retryAfter: isRateLimit ? 60 : undefined,
+        },
+        { status: isRateLimit ? 429 : 500 }
+      );
+    }
 
     // Cache the result persistently in Redis
     await setCachedEvaluation(id, evaluation);
@@ -119,9 +153,15 @@ export async function GET(
     return NextResponse.json(evaluation);
   } catch (error) {
     console.error('Error in AI evaluation:', error);
+    const errorMessage = error instanceof Error ? error.message : 'AI evaluation failed';
+    const isRateLimit = errorMessage.includes('429') || errorMessage.includes('rate_limit');
+
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'AI evaluation failed' },
-      { status: 500 }
+      {
+        error: isRateLimit ? 'Rate limited - please try again in a few minutes' : errorMessage,
+        retryAfter: isRateLimit ? 60 : undefined,
+      },
+      { status: isRateLimit ? 429 : 500 }
     );
   }
 }
