@@ -177,7 +177,8 @@ export function CandidatesProvider({ children }: { children: ReactNode }) {
   }, [aiEvaluations]);
 
   // Sync candidates from BambooHR (incremental - only fetches new candidates)
-  const syncCandidates = useCallback(async (): Promise<{ newCount: number } | null> => {
+  // Automatically triggers AI evaluation for new candidates
+  const syncCandidates = useCallback(async (): Promise<{ newCount: number; newCandidateIds: string[] } | null> => {
     setSyncing(true);
     try {
       const response = await fetch('/api/candidates?refresh=true');
@@ -191,24 +192,44 @@ export function CandidatesProvider({ children }: { children: ReactNode }) {
       setJobOpenings(data.jobOpenings || []);
       setLastSync(data.lastSync || new Date().toISOString());
 
-      // Also refresh AI evaluations cache
+      // Get IDs of new candidates
+      const newCandidateIds: string[] = data.newCandidateIds || [];
+      const newCount = data.newCandidates || 0;
+
+      // Refresh cached AI evaluations
       fetch('/api/candidates/ai-evaluations/batch')
         .then(res => res.json())
         .then(evalData => {
           if (evalData.evaluations) {
-            setAiEvaluations(evalData.evaluations);
+            setAiEvaluations(prev => ({ ...prev, ...evalData.evaluations }));
           }
         })
         .catch(err => console.error('Error refreshing AI evaluations:', err));
 
-      return { newCount: data.newCandidates || 0 };
+      // Automatically trigger AI evaluation for NEW candidates (in background)
+      if (newCandidateIds.length > 0) {
+        console.log(`[CandidatesContext] Triggering AI evaluation for ${newCandidateIds.length} new candidates`);
+
+        // Process new candidates one at a time to avoid overwhelming the API
+        for (const candidateId of newCandidateIds) {
+          // Don't await - let them run in background
+          fetchAIEvaluation(candidateId).catch(err => {
+            console.error(`Error evaluating new candidate ${candidateId}:`, err);
+          });
+
+          // Small delay between requests to avoid rate limiting
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+      }
+
+      return { newCount, newCandidateIds };
     } catch (err) {
       console.error('Error syncing candidates:', err);
       return null;
     } finally {
       setSyncing(false);
     }
-  }, []);
+  }, [fetchAIEvaluation]);
 
   // Update candidate status
   const updateCandidateStatus = useCallback(async (

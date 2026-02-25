@@ -447,11 +447,15 @@ export default function CandidatesDashboard() {
             setSyncMessage(null);
             const result = await syncCandidates();
             if (result) {
-              setSyncMessage(result.newCount > 0
-                ? `Synced! ${result.newCount} new candidate${result.newCount !== 1 ? 's' : ''} found`
-                : 'Synced! No new candidates'
-              );
-              setTimeout(() => setSyncMessage(null), 5000);
+              if (result.newCount > 0) {
+                setSyncMessage(`Synced! ${result.newCount} new candidate${result.newCount !== 1 ? 's' : ''} - AI rating in progress...`);
+                // Update message after a delay to indicate AI rating is ongoing
+                setTimeout(() => setSyncMessage('AI ratings generating in background...'), 3000);
+                setTimeout(() => setSyncMessage(null), 10000);
+              } else {
+                setSyncMessage('Synced! No new candidates');
+                setTimeout(() => setSyncMessage(null), 5000);
+              }
             }
           }}
           disabled={syncing}

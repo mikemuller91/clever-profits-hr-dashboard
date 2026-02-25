@@ -227,6 +227,9 @@ export async function GET(request: Request) {
       }
     }
 
+    // Get IDs of new candidates for auto AI evaluation
+    const newCandidateIds = newCandidates.map(c => c.id);
+
     console.log(`[Candidates API] Completed in ${Date.now() - startTime}ms (${newCandidates.length} new, ${allCandidates.length} total)`);
 
     return NextResponse.json({
@@ -234,6 +237,7 @@ export async function GET(request: Request) {
       jobOpenings,
       totalFetched: allCandidates.length,
       newCandidates: newCandidates.length,
+      newCandidateIds,
       lastSync: new Date().toISOString(),
     });
   } catch (error) {
