@@ -5,7 +5,7 @@ import { getCachedEvaluation, setCachedEvaluation } from '@/lib/ai-cache';
 
 const BAMBOO_API_KEY = process.env.BAMBOO_API_KEY;
 const BAMBOO_SUBDOMAIN = process.env.BAMBOO_SUBDOMAIN;
-const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 function getAuthHeader(): string {
   const credentials = Buffer.from(`${BAMBOO_API_KEY}:x`).toString('base64');
@@ -25,9 +25,9 @@ export async function GET(
     );
   }
 
-  if (!ANTHROPIC_API_KEY) {
+  if (!GEMINI_API_KEY) {
     return NextResponse.json(
-      { error: 'Anthropic API key not configured. Add ANTHROPIC_API_KEY to your environment variables.' },
+      { error: 'Gemini API key not configured. Add GEMINI_API_KEY to your environment variables.' },
       { status: 500 }
     );
   }

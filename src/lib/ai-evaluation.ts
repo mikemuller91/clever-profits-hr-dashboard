@@ -1,8 +1,7 @@
-import Anthropic from '@anthropic-ai/sdk';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-});
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
 export interface AIEvaluation {
   score: number; // 1-10
@@ -85,25 +84,16 @@ Remember:
 
 Respond with only valid JSON, no other text.`;
 
-  const message = await anthropic.messages.create({
-    model: 'claude-sonnet-4-20250514',
-    max_tokens: 1024,
-    messages: [
-      {
-        role: 'user',
-        content: prompt,
-      },
-    ],
-  });
+  const result = await model.generateContent(prompt);
+  const response = result.response;
+  const text = response.text();
 
-  // Extract the text content
-  const textContent = message.content.find(block => block.type === 'text');
-  if (!textContent || textContent.type !== 'text') {
+  if (!text) {
     throw new Error('No text response from AI');
   }
 
   // Parse the JSON response
-  const jsonMatch = textContent.text.match(/\{[\s\S]*\}/);
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {
     throw new Error('Could not parse AI response as JSON');
   }
