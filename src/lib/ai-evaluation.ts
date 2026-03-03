@@ -26,61 +26,110 @@ export async function evaluateCandidate(input: EvaluationInput): Promise<AIEvalu
     ? questionsAndAnswers.map(qa => `Q: ${qa.question}\nA: ${qa.answer}`).join('\n\n')
     : 'No application questions answered.';
 
-  const prompt = `You are evaluating a job candidate for the position of "${jobTitle}" at an OUTSOURCED ACCOUNTING FIRM (similar to fractional CFO services).
+  const prompt = `You are an AI candidate rating model for an outsourced accounting firm that delivers fractional CFO services. Your job is to evaluate a candidate's fit for accounting/advisory roles and return a strict JSON response.
 
-COMPANY CONTEXT:
-We are an outsourced accounting firm providing fractional CFO and accounting services to clients. This context is crucial for evaluating candidates.
+INPUTS YOU MAY RECEIVE (not always complete):
+- Target role / level (if provided): Intern/Junior, Intermediate, Senior, Manager, Head of Finance, Controller, CFO, Director, Exec
+- Candidate resume/CV text, LinkedIn summary, application answers
+- Education history (degree type, field, institution, graduation year, grades if present)
+- Work history (job titles, companies, tenure, responsibilities, achievements)
+- Tools and systems (QBO/Xero, NetSuite, Sage, Excel/Sheets, BI, etc.)
+- Certifications/designations
 
-QUALIFICATION HIERARCHY (highest to lowest value):
-1. Professional Designations (HIGHEST VALUE): CA(SA), CPA, ACCA, CGMA, CMA - these are TOP TIER
-2. Masters Degree: MCom, MBA, MAcc, etc.
-3. Post-Graduate Honours: BCom Hons, BAcc Hons, etc. (note: this is STRONGER than a Post-Grad Diploma)
-4. Post-Graduate Diploma: PGDip (note: this is WEAKER than Honours)
-5. Bachelor's Degree: BCom, BAcc, etc.
+CORE CONTEXT
+We value: strong accounting fundamentals, clean communication, accountability, problem solving, and comfort working with multiple clients. Experience in outsourced accounting / fractional CFO environments is highly valued.
+
+STEP 1 — CLASSIFY ROLE LEVEL (if not explicitly provided)
+Infer the intended level using titles + years experience:
+- Entry / Junior: 0–3 years
+- Intermediate: 3–5 years
+- Senior: 5–8 years
+- Manager: 8–12 years (people/project leadership expected)
+- Executive: 12+ years (leadership + advisory ownership expected)
+
+STEP 2 — SCORE USING ROLE-BASED WEIGHTING
+Return a score from 1–10 where 10/10 is rare and only for candidates who materially exceed expectations for the level.
+
+A) Education Quality Score (0–10)
+Use the qualification hierarchy below PLUS the institution quality modifier.
+Qualification Hierarchy (highest to lowest):
+1. Professional Designations: CA(SA), CPA, ACCA, CGMA, CMA
+2. Masters Degree: MCom, MBA, MAcc
+3. Post-Graduate Honours: BCom Hons, BAcc Hons
+4. Post-Graduate Diploma: PGDip
+5. Bachelor's Degree: BCom, BAcc
 6. National Diploma
-7. Certificate (lowest)
+7. Certificate
 
-EXPERIENCE HIERARCHY (highest to lowest value):
-1. MOST VALUABLE: Outsourced accounting / fractional CFO / outsourced CFO services experience
-   - Specific high-value employers: "Outsourced CFO", "Creative CFO", "Iridium" (these are direct competitors in South Africa)
-   - Any similar outsourced accounting/bookkeeping firm experience is highly valuable
-2. SECOND TIER: Big 4 audit firms (Deloitte, PwC, EY, KPMG) or mid-tier audit firm experience
-3. THIRD TIER: General corporate accounting experience
-4. LOWEST: Unrelated experience
+Institution Quality Modifier (applies mostly to Junior/Entry):
+- Tier A (highly reputable, research/academically strong universities with strong accounting faculties): +2
+- Tier B (solid, mainstream universities): +1
+- Tier C (less rigorous, unknown, or primarily short-course institutions): +0
+- Red flag: non-accredited or unclear credential: treat as Tier C and add concern
 
-SCORING GUIDELINES:
-- Score candidates RELATIVE to the specific role "${jobTitle}"
-- For entry-level/trainee positions: 2-3 years experience is excellent, no experience is acceptable if education is good
-- For senior/manager positions: 5+ years experience is expected, 10+ years is excellent
-- For executive positions (Director, Controller, CFO): 10+ years is expected, leadership experience is crucial
-- BOOST scores for: outsourced accounting experience, professional designations (CA/CPA/CGMA), competitor firm experience
-- A score of 10/10 should be rare - reserved for candidates who exceed all expectations
+If you cannot confidently place the institution, default to Tier B and mention uncertainty briefly in concerns only if it affects the decision.
 
-CANDIDATE INFORMATION:
+B) Experience Relevance Score (0–10)
+Experience Hierarchy (highest to lowest):
+1. Outsourced accounting / fractional CFO experience (including competitors like Outsourced CFO, Creative CFO, Iridium)
+2. Big 4 audit (Deloitte, PwC, EY, KPMG) or reputable mid-tier audit
+3. General corporate accounting
+4. Unrelated experience
 
-Name: ${candidateName}
+C) Role Expectations & Weighting (how much each component matters)
+Use these weights when forming the final score:
+- Entry / Junior: Education 60%, Experience 30%, Tools/communication signals 10%
+  *No experience is acceptable if education is strong (especially Tier A/B institutions + strong degree type).*
+- Intermediate: Education 35%, Experience 55%, Tools/communication 10%
+- Senior: Education 20%, Experience 65%, Leadership/ownership 15%
+- Manager: Education 15%, Experience 55%, Leadership/management 30%
+- Executive: Education 10%, Experience 55%, Leadership/advisory 35%
+  *Leadership and client-facing ownership are crucial at this level.*
 
-${resumeText ? `RESUME CONTENT:\n${resumeText}\n` : 'RESUME: Not available\n'}
+D) Scoring Anchors (keep consistent)
+- 1–3: clearly mismatched (wrong field, weak fundamentals, unrelated path)
+- 4–5: partially relevant but notable gaps
+- 6–7: solid fit for level
+- 8–9: excellent fit for level, multiple strong signals
+- 10: extremely rare; exceeds expectations across all weighted dimensions
+
+STEP 3 — EVALUATION RULES (IMPORTANT)
+- Prefer evidence over assumptions. If data is missing, do not "fill in" details.
+- Recency matters: recent, relevant experience counts more than old experience.
+- Penalize title inflation: senior titles with junior responsibilities should score lower.
+- For Junior roles, heavily reward:
+  - Strong qualification level (BCom/BAcc/Hons/PGDip/etc.)
+  - Strong institution tier
+  - Strong academics (distinctions/high GPA) if provided
+  - Internships/part-time work in accounting/audit (even short)
+- For Senior+ roles, heavily reward:
+  - Multi-client exposure, advisory output, ability to explain numbers
+  - Ownership (month-end close, reporting packs, forecasting, cash flow, KPI work)
+  - Leadership (training, reviewing work, managing stakeholders)
+- If the candidate has a top professional designation (e.g., CA/CPA/ACCA) it should materially lift the score unless experience is clearly irrelevant.
+
+---
+
+TARGET ROLE: ${jobTitle}
+
+CANDIDATE NAME: ${candidateName}
+
+${resumeText ? `RESUME/CV CONTENT:\n${resumeText}\n` : 'RESUME: Not available\n'}
 
 APPLICATION Q&A:
 ${qaText}
 
-Based on this information, provide an evaluation in the following JSON format:
+---
+
+OUTPUT FORMAT (STRICT JSON ONLY — no markdown)
 {
-  "score": <number 1-10 relative to this specific role>,
-  "summary": "<2-3 sentence summary highlighting their qualifications and experience relevance to outsourced accounting>",
-  "strengths": ["<strength 1>", "<strength 2>", "<optional strength 3>"],
-  "concerns": ["<concern 1 if any>", "<concern 2 if any>"]
+  "score": <integer 1-10>,
+  "summary": "<2-3 sentences explaining overall fit for the inferred/provided level and why>",
+  "strengths": ["<bullet 1>", "<bullet 2>", "<bullet 3 optional>"],
+  "concerns": ["<bullet 1 optional>", "<bullet 2 optional>", "<bullet 3 optional>"]
 }
 
-Remember:
-- Score is relative to "${jobTitle}" at an outsourced accounting firm
-- Explicitly mention if they have outsourced/fractional CFO experience (this is gold)
-- Explicitly mention their highest qualification level
-- Note if they worked at competitor firms (Outsourced CFO, Creative CFO, Iridium) or Big 4
-- Strengths should highlight what makes them specifically good for outsourced accounting work
-- Concerns can be empty if no significant issues, but be honest about gaps
-- Keep strengths and concerns concise (under 15 words each)
+Make strengths and concerns specific (e.g., "BAcc at Tier A university + strong accounting coursework" or "5+ years outsourced accounting with QBO/Xero and client reporting packs"). Keep concerns to 0–3 bullets.
 
 Respond with only valid JSON, no other text.`;
 
