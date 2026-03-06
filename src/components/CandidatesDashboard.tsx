@@ -35,7 +35,7 @@ export default function CandidatesDashboard() {
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedCandidate, setExpandedCandidate] = useState<string | null>(null);
   const [loadingDetails, setLoadingDetails] = useState<string | null>(null);
-  const [sortColumn, setSortColumn] = useState<keyof Candidate>('appliedDate');
+  const [sortColumn, setSortColumn] = useState<keyof Candidate | 'aiScore'>('appliedDate');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
   const [statusDropdownOpen, setStatusDropdownOpen] = useState<string | null>(null);
@@ -144,6 +144,13 @@ export default function CandidatesDashboard() {
     }
 
     result = [...result].sort((a, b) => {
+      // Special handling for AI Score column - sort by aiEvaluations score
+      if (sortColumn === 'aiScore') {
+        const aVal = aiEvaluations[a.id]?.score ?? -1;
+        const bVal = aiEvaluations[b.id]?.score ?? -1;
+        return sortDirection === 'asc' ? aVal - bVal : bVal - aVal;
+      }
+
       // Special handling for rating column - sort numerically
       if (sortColumn === 'rating') {
         const aVal = a.rating ?? -1;
@@ -151,8 +158,8 @@ export default function CandidatesDashboard() {
         return sortDirection === 'asc' ? aVal - bVal : bVal - aVal;
       }
 
-      const aVal = a[sortColumn] || '';
-      const bVal = b[sortColumn] || '';
+      const aVal = a[sortColumn as keyof Candidate] || '';
+      const bVal = b[sortColumn as keyof Candidate] || '';
 
       if (sortDirection === 'asc') {
         return String(aVal).localeCompare(String(bVal));
@@ -166,7 +173,7 @@ export default function CandidatesDashboard() {
 
   const selectedJob = jobOpenings.find(j => j.id === selectedJobId);
 
-  const handleSort = (column: keyof Candidate) => {
+  const handleSort = (column: keyof Candidate | 'aiScore') => {
     if (sortColumn === column) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
     } else {
@@ -794,14 +801,14 @@ export default function CandidatesDashboard() {
                     </th>
                     {[
                       { key: 'displayName', label: 'Candidate' },
-                      { key: 'rating', label: 'AI Score' },
+                      { key: 'aiScore', label: 'AI Score' },
                       { key: 'status', label: 'Status' },
                       { key: 'appliedDate', label: 'Applied Date' },
                       { key: 'source', label: 'Source' },
                     ].map(({ key, label }) => (
                       <th
                         key={key}
-                        onClick={() => handleSort(key as keyof Candidate)}
+                        onClick={() => handleSort(key as keyof Candidate | 'aiScore')}
                         className="text-left py-4 px-6 font-medium cursor-pointer hover:bg-cp-blue/20 transition-colors"
                       >
                         <div className="flex items-center gap-2">
