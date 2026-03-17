@@ -84,3 +84,14 @@ export interface AIEvaluation {
   concerns: string[]; // Concerns or gaps
   generatedAt: string; // ISO timestamp
 }
+
+export interface TalentPool {
+  id: string;
+  name: string;
+  candidateIds: string[];
+  createdAt: string;
+}
+
+export interface TalentPoolWithCandidates extends TalentPool {
+  candidates: Candidate[];
+}
