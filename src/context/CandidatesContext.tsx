@@ -206,6 +206,31 @@ export function CandidatesProvider({ children }: { children: ReactNode }) {
         })
         .catch(err => console.error('Error refreshing AI evaluations:', err));
 
+      // Auto-screen new candidates (in background) before AI evaluation
+      if (newCandidateIds.length > 0) {
+        fetch('/api/candidates/auto-screen', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ candidateIds: newCandidateIds }),
+        })
+          .then(res => res.json())
+          .then(screenData => {
+            if (screenData.disqualified > 0) {
+              console.log(`[CandidatesContext] Auto-screen: ${screenData.disqualified} candidates marked Not Qualified`);
+              // Update local state for screened candidates
+              const disqualifiedIds = new Set(screenData.results.map((r: { candidateId: string }) => r.candidateId));
+              setCandidates(prev =>
+                prev.map(c =>
+                  disqualifiedIds.has(c.id)
+                    ? { ...c, status: 'Not Qualified', statusId: 12 }
+                    : c
+                )
+              );
+            }
+          })
+          .catch(err => console.error('[CandidatesContext] Auto-screen error:', err));
+      }
+
       // Automatically trigger AI evaluation for NEW candidates (in background)
       // Rate limited to ~4 per minute to stay under API limits
       if (newCandidateIds.length > 0) {
