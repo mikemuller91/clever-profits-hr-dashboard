@@ -21,6 +21,10 @@ export default function TalentPoolDashboard() {
   const [addSearchTerm, setAddSearchTerm] = useState('');
   const [showAddDropdown, setShowAddDropdown] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
+  const [showCreatePool, setShowCreatePool] = useState(false);
+  const [newPoolName, setNewPoolName] = useState('');
+  const [creatingPool, setCreatingPool] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
   const addDropdownRef = useRef<HTMLDivElement>(null);
 
   // Load pools and candidates
@@ -111,6 +115,34 @@ export default function TalentPoolDashboard() {
     }
   }, [selectedPoolId]);
 
+  const createPool = useCallback(async () => {
+    if (!newPoolName.trim()) return;
+    setCreatingPool(true);
+    setCreateError(null);
+    try {
+      const res = await fetch('/api/talent-pools', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newPoolName.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setCreateError(data.error || 'Failed to create pool');
+        return;
+      }
+      if (data.pools) {
+        setPools(data.pools);
+      }
+      setSelectedPoolId(data.pool.id);
+      setNewPoolName('');
+      setShowCreatePool(false);
+    } catch (err) {
+      setCreateError(err instanceof Error ? err.message : 'Failed to create pool');
+    } finally {
+      setCreatingPool(false);
+    }
+  }, [newPoolName]);
+
   const removeCandidate = useCallback(async (candidateId: string) => {
     if (!selectedPoolId) return;
     setRemovingId(candidateId);
@@ -179,7 +211,7 @@ export default function TalentPoolDashboard() {
       </div>
 
       {/* Pool Tabs */}
-      <div className="flex gap-2 mb-6 flex-wrap">
+      <div className="flex gap-2 mb-6 flex-wrap items-center">
         {pools.map(pool => (
           <button
             key={pool.id}
@@ -200,6 +232,48 @@ export default function TalentPoolDashboard() {
             </span>
           </button>
         ))}
+
+        {/* Create Pool Button / Form */}
+        {showCreatePool ? (
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              placeholder="Pool name..."
+              value={newPoolName}
+              onChange={(e) => { setNewPoolName(e.target.value); setCreateError(null); }}
+              onKeyDown={(e) => { if (e.key === 'Enter') createPool(); if (e.key === 'Escape') { setShowCreatePool(false); setNewPoolName(''); setCreateError(null); } }}
+              className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-cp-blue/30 focus:border-cp-blue w-48"
+              autoFocus
+              disabled={creatingPool}
+            />
+            <button
+              onClick={createPool}
+              disabled={creatingPool || !newPoolName.trim()}
+              className="px-3 py-2 bg-cp-blue text-white rounded-lg text-sm font-medium hover:bg-cp-blue/90 transition-colors disabled:opacity-50"
+            >
+              {creatingPool ? 'Creating...' : 'Create'}
+            </button>
+            <button
+              onClick={() => { setShowCreatePool(false); setNewPoolName(''); setCreateError(null); }}
+              className="px-3 py-2 text-cp-gray hover:text-cp-dark text-sm transition-colors"
+            >
+              Cancel
+            </button>
+            {createError && (
+              <span className="text-red-500 text-xs">{createError}</span>
+            )}
+          </div>
+        ) : (
+          <button
+            onClick={() => setShowCreatePool(true)}
+            className="px-4 py-2 rounded-lg font-medium text-sm border border-dashed border-gray-300 text-cp-gray hover:border-cp-blue hover:text-cp-blue transition-colors flex items-center gap-1.5"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            New Pool
+          </button>
+        )}
       </div>
 
       {selectedPool && (

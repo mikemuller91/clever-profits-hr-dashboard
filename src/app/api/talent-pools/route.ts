@@ -49,6 +49,51 @@ export async function GET() {
   }
 }
 
+// PUT - Create a new talent pool
+export async function PUT(request: Request) {
+  try {
+    const body = await request.json();
+    const { name } = body;
+
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      return NextResponse.json(
+        { error: 'Pool name is required' },
+        { status: 400 }
+      );
+    }
+
+    const pools = await getPools();
+
+    // Generate slug from name
+    const id = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+    if (pools.some(p => p.id === id)) {
+      return NextResponse.json(
+        { error: 'A pool with this name already exists' },
+        { status: 409 }
+      );
+    }
+
+    const newPool: TalentPool = {
+      id,
+      name: name.trim(),
+      candidateIds: [],
+      createdAt: new Date().toISOString(),
+    };
+
+    pools.push(newPool);
+    await savePools(pools);
+
+    return NextResponse.json({ pool: newPool, pools });
+  } catch (error) {
+    console.error('[Talent Pools] PUT error:', error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Failed to create talent pool' },
+      { status: 500 }
+    );
+  }
+}
+
 // POST - Add/remove candidate from pool
 export async function POST(request: Request) {
   try {
