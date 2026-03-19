@@ -264,16 +264,35 @@ export default function CandidatesDashboard() {
   };
 
   // Bulk selection handlers
-  const toggleCandidateSelection = (candidateId: string) => {
+  const lastSelectedIndexRef = useRef<number | null>(null);
+
+  const toggleCandidateSelection = (candidateId: string, index?: number, shiftKey?: boolean) => {
     setSelectedCandidates(prev => {
       const next = new Set(prev);
-      if (next.has(candidateId)) {
-        next.delete(candidateId);
+
+      // Shift-click: select range between last clicked and current
+      if (shiftKey && lastSelectedIndexRef.current !== null && index !== undefined) {
+        const start = Math.min(lastSelectedIndexRef.current, index);
+        const end = Math.max(lastSelectedIndexRef.current, index);
+        for (let i = start; i <= end; i++) {
+          if (filteredCandidates[i]) {
+            next.add(filteredCandidates[i].id);
+          }
+        }
       } else {
-        next.add(candidateId);
+        if (next.has(candidateId)) {
+          next.delete(candidateId);
+        } else {
+          next.add(candidateId);
+        }
       }
+
       return next;
     });
+
+    if (index !== undefined) {
+      lastSelectedIndexRef.current = index;
+    }
   };
 
   const toggleSelectAll = () => {
@@ -840,8 +859,8 @@ export default function CandidatesDashboard() {
                             <input
                               type="checkbox"
                               checked={selectedCandidates.has(candidate.id)}
-                              onChange={() => toggleCandidateSelection(candidate.id)}
-                              onClick={(e) => e.stopPropagation()}
+                              onChange={() => {/* handled by onClick */}}
+                              onClick={(e) => { e.stopPropagation(); toggleCandidateSelection(candidate.id, index, e.shiftKey); }}
                               className="w-4 h-4 rounded border-gray-300 text-cp-blue focus:ring-cp-blue cursor-pointer"
                             />
                           </td>
