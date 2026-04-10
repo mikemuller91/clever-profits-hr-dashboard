@@ -107,7 +107,7 @@ export async function GET(
 
     // Call AI evaluation with retry for rate limits and 503 errors
     // Models to try in order (fallback if primary is unavailable)
-    const modelsToTry = ['gemini-2.5-flash', 'gemini-2.0-flash'];
+    const modelsToTry = ['gemini-2.5-flash', 'gemini-2.5-flash-lite'];
     let evaluation;
     let lastError;
 
