@@ -16,7 +16,7 @@ export async function GET() {
 
     // Simple test message to check if API is working
     const response = await genAI.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-2.5-flash-lite',
       contents: 'Say "OK"',
     });
     const text = response.text;
