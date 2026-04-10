@@ -105,45 +105,61 @@ export async function GET(
       }
     }
 
-    // Call AI evaluation with retry for rate limits
+    // Call AI evaluation with retry for rate limits and 503 errors
+    // Models to try in order (fallback if primary is unavailable)
+    const modelsToTry = ['gemini-2.5-flash', 'gemini-2.0-flash'];
     let evaluation;
     let lastError;
 
-    for (let attempt = 0; attempt < 3; attempt++) {
-      try {
-        evaluation = await evaluateCandidate({
-          jobTitle,
-          resumeText,
-          questionsAndAnswers,
-          candidateName,
-        });
-        break; // Success, exit retry loop
-      } catch (err) {
-        lastError = err;
-        const errorMessage = err instanceof Error ? err.message : '';
+    for (const model of modelsToTry) {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          evaluation = await evaluateCandidate({
+            jobTitle,
+            resumeText,
+            questionsAndAnswers,
+            candidateName,
+            model,
+          });
+          break; // Success, exit retry loop
+        } catch (err) {
+          lastError = err;
+          const errorMessage = err instanceof Error ? err.message : '';
+          const errorStr = String(err);
 
-        if (errorMessage.includes('429') || errorMessage.includes('rate_limit')) {
-          // Rate limited - wait and retry
-          const waitTime = Math.pow(2, attempt + 1) * 15000; // 30s, 60s, 120s
-          console.log(`[AI Evaluation] Rate limited, waiting ${waitTime / 1000}s before retry ${attempt + 1}/3`);
-          await new Promise(resolve => setTimeout(resolve, waitTime));
-        } else {
-          // Other error - don't retry
-          throw err;
+          // Check for retryable errors: 429 (rate limit) or 503 (service unavailable)
+          const isRateLimit = errorMessage.includes('429') || errorMessage.includes('rate_limit');
+          const isUnavailable = errorMessage.includes('503') || errorStr.includes('503') ||
+                               errorMessage.includes('UNAVAILABLE') || errorStr.includes('high demand');
+
+          if (isRateLimit || isUnavailable) {
+            const waitTime = Math.pow(2, attempt + 1) * 5000; // 10s, 20s, 40s
+            console.log(`[AI Evaluation] ${isRateLimit ? 'Rate limited' : 'Service unavailable'} with ${model}, waiting ${waitTime / 1000}s before retry ${attempt + 1}/3`);
+            await new Promise(resolve => setTimeout(resolve, waitTime));
+          } else {
+            // Other error - don't retry, but try next model
+            console.error(`[AI Evaluation] Error with ${model}:`, errorMessage);
+            break;
+          }
         }
       }
+
+      if (evaluation) break; // Success with this model
+      console.log(`[AI Evaluation] Failed with ${model}, trying fallback...`);
     }
 
     if (!evaluation) {
       const errorMessage = lastError instanceof Error ? lastError.message : 'AI evaluation failed';
       const isRateLimit = errorMessage.includes('429') || errorMessage.includes('rate_limit');
+      const isUnavailable = errorMessage.includes('503') || errorMessage.includes('UNAVAILABLE');
 
       return NextResponse.json(
         {
-          error: isRateLimit ? 'Rate limited - please try again in a few minutes' : errorMessage,
-          retryAfter: isRateLimit ? 60 : undefined,
+          error: isUnavailable ? 'AI service temporarily unavailable - please try again in a few minutes' :
+                 isRateLimit ? 'Rate limited - please try again in a few minutes' : errorMessage,
+          retryAfter: (isRateLimit || isUnavailable) ? 60 : undefined,
         },
-        { status: isRateLimit ? 429 : 500 }
+        { status: isUnavailable ? 503 : isRateLimit ? 429 : 500 }
       );
     }
 
@@ -155,13 +171,15 @@ export async function GET(
     console.error('Error in AI evaluation:', error);
     const errorMessage = error instanceof Error ? error.message : 'AI evaluation failed';
     const isRateLimit = errorMessage.includes('429') || errorMessage.includes('rate_limit');
+    const isUnavailable = errorMessage.includes('503') || errorMessage.includes('UNAVAILABLE');
 
     return NextResponse.json(
       {
-        error: isRateLimit ? 'Rate limited - please try again in a few minutes' : errorMessage,
-        retryAfter: isRateLimit ? 60 : undefined,
+        error: isUnavailable ? 'AI service temporarily unavailable - please try again in a few minutes' :
+               isRateLimit ? 'Rate limited - please try again in a few minutes' : errorMessage,
+        retryAfter: (isRateLimit || isUnavailable) ? 60 : undefined,
       },
-      { status: isRateLimit ? 429 : 500 }
+      { status: isUnavailable ? 503 : isRateLimit ? 429 : 500 }
     );
   }
 }

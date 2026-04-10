@@ -25,10 +25,11 @@ interface EvaluationInput {
   resumeText: string | null;
   questionsAndAnswers: Array<{ question: string; answer: string }>;
   candidateName: string;
+  model?: string; // Optional: defaults to gemini-2.5-flash
 }
 
 export async function evaluateCandidate(input: EvaluationInput): Promise<AIEvaluation> {
-  const { jobTitle, resumeText, questionsAndAnswers, candidateName } = input;
+  const { jobTitle, resumeText, questionsAndAnswers, candidateName, model = 'gemini-2.5-flash' } = input;
 
   // Format Q&A for the prompt
   const qaText = questionsAndAnswers.length > 0
@@ -229,8 +230,9 @@ OUTPUT (STRICT JSON ONLY — NO MARKDOWN)
 
 Respond with only valid JSON, no other text.`;
 
+  console.log(`[AI Evaluation] Using model: ${model}`);
   const response = await genAI.models.generateContent({
-    model: 'gemini-2.5-flash',
+    model,
     contents: prompt,
   });
   const text = response.text;
