@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
 
 export async function GET() {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -12,12 +12,14 @@ export async function GET() {
   }
 
   try {
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+    const genAI = new GoogleGenAI({ apiKey });
 
     // Simple test message to check if API is working
-    const result = await model.generateContent('Say "OK"');
-    const text = result.response.text();
+    const response = await genAI.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: 'Say "OK"',
+    });
+    const text = response.text;
 
     return NextResponse.json({
       status: 'WORKING',
