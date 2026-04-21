@@ -43,10 +43,26 @@ export interface CandidateDetail {
   availableStartDate: string;
   desiredSalary: string;
   referredBy: string;
-  resumeFileId: number | null;
-  coverLetterFileId: number | null;
+  // Local file storage
+  resumeFilePath?: string | null;
+  hasResume?: boolean;
+  coverLetterPath?: string | null;
+  // BambooHR file IDs (legacy)
+  resumeFileId?: number | null;
+  coverLetterFileId?: number | null;
+  // AI Evaluation
+  aiScore?: number | null;
+  aiSummary?: string | null;
+  aiStrengths?: string[];
+  aiConcerns?: string[];
+  aiEvaluatedAt?: string | null;
   questionsAndAnswers: { question: string; answer: string }[];
+  notes?: { id: number; note: string; author: string; createdAt: string }[];
   hiringLead: { name: string; employeeId: number } | null;
+  createdAt?: string;
+  updatedAt?: string;
+  department?: string;
+  location?: string;
 }
 
 export interface JobOpening {
