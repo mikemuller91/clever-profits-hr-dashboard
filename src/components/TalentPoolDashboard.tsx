@@ -116,6 +116,29 @@ export default function TalentPoolDashboard() {
     );
   });
 
+  // Map candidate status to Kanban column
+  const mapStatusToColumn = (status: string): string => {
+    const s = status.toLowerCase();
+
+    // Exact matches first
+    const exactMatch = STATUS_COLUMNS.find(col => col.toLowerCase() === s);
+    if (exactMatch) return exactMatch;
+
+    // Fuzzy matches for common variations
+    if (s.includes('interview')) return 'Interview';
+    if (s.includes('review') || s.includes('screen')) return 'Reviewed';
+    if (s.includes('phone')) return 'Phone Screening';
+    if (s.includes('assess') || s.includes('test')) return 'Assessment';
+    if (s.includes('reference')) return 'Reference Check';
+    if (s.includes('offer')) return 'Offer Extended';
+    if (s.includes('hire') || s.includes('accept')) return 'Hired';
+    if (s.includes('not qualified') || s.includes('disqualif')) return 'Not Qualified';
+    if (s.includes('reject') || s.includes('decline')) return 'Rejected';
+    if (s.includes('withdraw') || s.includes('withdrew')) return 'Withdrawn';
+
+    return 'New';
+  };
+
   // Group candidates by status for Kanban columns
   const candidatesByStatus = useMemo(() => {
     const grouped: Record<string, Candidate[]> = {};
@@ -128,16 +151,8 @@ export default function TalentPoolDashboard() {
     // Group filtered candidates
     filteredPoolCandidates.forEach(candidate => {
       const status = candidate.status || 'New';
-      // Find matching column (case-insensitive)
-      const matchedColumn = STATUS_COLUMNS.find(
-        col => col.toLowerCase() === status.toLowerCase()
-      );
-      if (matchedColumn) {
-        grouped[matchedColumn].push(candidate);
-      } else {
-        // Put unknown statuses in 'New'
-        grouped['New'].push(candidate);
-      }
+      const column = mapStatusToColumn(status);
+      grouped[column].push(candidate);
     });
 
     return grouped;
