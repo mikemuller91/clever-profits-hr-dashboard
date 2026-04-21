@@ -26,10 +26,12 @@ export default function TalentPoolDashboard() {
     aiEvaluations,
     candidateDetails,
     aiEvaluationLoading,
+    statuses: availableStatuses,
     ensureLoaded,
     loading: candidatesLoading,
     fetchCandidateDetails: contextFetchDetails,
     fetchAIEvaluation,
+    updateCandidateStatus,
   } = useCandidates();
 
   const [pools, setPools] = useState<TalentPool[]>([]);
@@ -51,6 +53,9 @@ export default function TalentPoolDashboard() {
   const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [expandedQA, setExpandedQA] = useState<number | null>(null);
+  const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
+  const statusDropdownRef = useRef<HTMLDivElement>(null);
 
   // CV popup state
   const [cvPopup, setCvPopup] = useState<{ candidateId: string; fileId?: number; candidateName: string } | null>(null);
@@ -78,11 +83,14 @@ export default function TalentPoolDashboard() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Close add dropdown on outside click
+  // Close dropdowns on outside click
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (addDropdownRef.current && !addDropdownRef.current.contains(event.target as Node)) {
         setShowAddDropdown(false);
+      }
+      if (statusDropdownRef.current && !statusDropdownRef.current.contains(event.target as Node)) {
+        setStatusDropdownOpen(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
@@ -222,6 +230,19 @@ export default function TalentPoolDashboard() {
       setRemovingId(null);
     }
   }, [selectedPoolId]);
+
+  // Handle status change for candidate
+  const handleStatusChange = useCallback(async (candidateId: string, newStatusId: number, newStatusName: string) => {
+    setUpdatingStatus(true);
+    setStatusDropdownOpen(false);
+    try {
+      await updateCandidateStatus(candidateId, newStatusId, newStatusName);
+    } catch (err) {
+      console.error('Error updating status:', err);
+    } finally {
+      setUpdatingStatus(false);
+    }
+  }, [updateCandidateStatus]);
 
   // Open candidate detail modal
   const openCandidateDetail = useCallback(async (candidateId: string) => {
@@ -614,6 +635,53 @@ export default function TalentPoolDashboard() {
                       <span className="text-sm text-cp-gray">Generating AI evaluation...</span>
                     </div>
                   ) : null}
+
+                  {/* Status Change */}
+                  <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                    <span className="text-sm font-medium text-cp-dark">Status:</span>
+                    <div className="relative" ref={statusDropdownRef}>
+                      <button
+                        onClick={() => setStatusDropdownOpen(!statusDropdownOpen)}
+                        disabled={updatingStatus}
+                        className={`px-3 py-1.5 rounded-full text-sm font-medium ${getStatusColor(selectedCandidate.status)} hover:ring-2 hover:ring-offset-1 hover:ring-cp-blue/50 transition-all cursor-pointer disabled:opacity-50 flex items-center gap-1.5`}
+                      >
+                        {updatingStatus ? (
+                          <>
+                            <span className="animate-spin inline-block w-3 h-3 border border-current border-t-transparent rounded-full"></span>
+                            Updating...
+                          </>
+                        ) : (
+                          <>
+                            {selectedCandidate.status || 'New'}
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                          </>
+                        )}
+                      </button>
+                      {statusDropdownOpen && availableStatuses.length > 0 && (
+                        <div className="absolute left-0 z-20 mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 max-h-60 overflow-auto">
+                          {availableStatuses.map((status) => (
+                            <button
+                              key={status.id}
+                              onClick={() => handleStatusChange(selectedCandidateId, status.id, status.name)}
+                              className={`w-full text-left px-3 py-2 text-sm hover:bg-cp-light transition-colors flex items-center gap-2 ${
+                                selectedCandidate.statusId === status.id ? 'bg-cp-light font-medium' : ''
+                              }`}
+                            >
+                              <span className={`w-2 h-2 rounded-full ${getStatusColor(status.name)}`}></span>
+                              {status.name}
+                              {selectedCandidate.statusId === status.id && (
+                                <svg className="w-4 h-4 ml-auto text-cp-blue" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                </svg>
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
 
                   {/* Contact Info */}
                   {selectedCandidateDetails && (
