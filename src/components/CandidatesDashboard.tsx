@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, useMemo, useRef } from 'react';
-import { Candidate } from '@/types/candidates';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { Candidate, TalentPool } from '@/types/candidates';
 import { useCandidates } from '@/context/CandidatesContext';
 
 export default function CandidatesDashboard() {
@@ -48,10 +48,16 @@ export default function CandidatesDashboard() {
   const [bulkUpdating, setBulkUpdating] = useState(false);
   const bulkDropdownRef = useRef<HTMLDivElement>(null);
 
-  // CV popup state
-  const [cvPopup, setCvPopup] = useState<{ candidateId: string; fileId: number; candidateName: string } | null>(null);
+  // CV popup state - fileId is optional (only for BambooHR CVs)
+  const [cvPopup, setCvPopup] = useState<{ candidateId: string; fileId?: number; candidateName: string } | null>(null);
   const [cvLoading, setCvLoading] = useState(false);
   const [cvError, setCvError] = useState<string | null>(null);
+
+  // Talent pool state
+  const [talentPools, setTalentPools] = useState<TalentPool[]>([]);
+  const [poolDropdownOpen, setPoolDropdownOpen] = useState<string | null>(null);
+  const [addingToPool, setAddingToPool] = useState<string | null>(null);
+  const poolDropdownRef = useRef<HTMLDivElement>(null);
 
   // Keyword search state
   const [keywordSearch, setKeywordSearch] = useState('');
@@ -84,6 +90,9 @@ export default function CandidatesDashboard() {
       if (bulkDropdownRef.current && !bulkDropdownRef.current.contains(event.target as Node)) {
         setBulkStatusDropdownOpen(false);
       }
+      if (poolDropdownRef.current && !poolDropdownRef.current.contains(event.target as Node)) {
+        setPoolDropdownOpen(null);
+      }
     }
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -98,6 +107,22 @@ export default function CandidatesDashboard() {
   useEffect(() => {
     ensureLoaded();
   }, [ensureLoaded]);
+
+  // Fetch talent pools on mount
+  useEffect(() => {
+    async function fetchPools() {
+      try {
+        const res = await fetch('/api/talent-pools');
+        const data = await res.json();
+        if (data.pools) {
+          setTalentPools(data.pools);
+        }
+      } catch (err) {
+        console.error('Error fetching talent pools:', err);
+      }
+    }
+    fetchPools();
+  }, []);
 
   // Get unique statuses for filter
   const statuses = useMemo(() => {
@@ -346,8 +371,8 @@ export default function CandidatesDashboard() {
     }
   };
 
-  // CV popup handler
-  const openCvPopup = (candidateId: string, fileId: number, candidateName: string) => {
+  // CV popup handler - fileId is optional (only for BambooHR CVs)
+  const openCvPopup = (candidateId: string, candidateName: string, fileId?: number) => {
     setCvPopup({ candidateId, fileId, candidateName });
     setCvError(null);
   };
@@ -355,6 +380,47 @@ export default function CandidatesDashboard() {
   const closeCvPopup = () => {
     setCvPopup(null);
     setCvError(null);
+  };
+
+  // Delete candidates handler (supports single or bulk deletion)
+  const handleDeleteCandidates = async (candidateIds: string[]) => {
+    const count = candidateIds.length;
+    const message = count === 1
+      ? 'Are you sure you want to delete this candidate? This cannot be undone.'
+      : `Are you sure you want to delete ${count} candidates? This cannot be undone.`;
+
+    if (!confirm(message)) {
+      return;
+    }
+
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const candidateId of candidateIds) {
+      try {
+        const response = await fetch(`/api/candidates/${candidateId}`, {
+          method: 'DELETE',
+        });
+
+        if (response.ok) {
+          successCount++;
+        } else {
+          failCount++;
+        }
+      } catch (error) {
+        console.error('Error deleting candidate:', error);
+        failCount++;
+      }
+    }
+
+    // Remove deleted candidates from local state
+    setCandidates(prev => prev.filter(c => !candidateIds.includes(c.id)));
+    setSelectedCandidates(new Set());
+    setExpandedCandidate(null);
+
+    if (failCount > 0) {
+      alert(`Deleted ${successCount} candidate(s). Failed to delete ${failCount}.`);
+    }
   };
 
   // Keyword search handler
@@ -398,6 +464,28 @@ export default function CandidatesDashboard() {
     setSearchResults(null);
     setShowSearchResults(false);
   };
+
+  // Add candidate to talent pool
+  const addCandidateToPool = useCallback(async (candidateId: string, poolId: string) => {
+    setAddingToPool(candidateId);
+    try {
+      const res = await fetch('/api/talent-pools', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ poolId, candidateId, action: 'add' }),
+      });
+      const data = await res.json();
+      if (res.ok && data.pool) {
+        // Update local pool state
+        setTalentPools(prev => prev.map(p => p.id === poolId ? data.pool : p));
+        setPoolDropdownOpen(null);
+      }
+    } catch (err) {
+      console.error('Error adding candidate to pool:', err);
+    } finally {
+      setAddingToPool(null);
+    }
+  }, []);
 
   // Highlight search term in text
   const highlightMatch = (text: string, term: string) => {
@@ -766,26 +854,36 @@ export default function CandidatesDashboard() {
                   Clear selection
                 </button>
               </div>
-              <div className="relative" ref={bulkDropdownRef}>
+              <div className="flex items-center gap-2">
                 <button
-                  onClick={() => setBulkStatusDropdownOpen(!bulkStatusDropdownOpen)}
-                  disabled={bulkUpdating}
-                  className="px-4 py-2 bg-cp-blue text-white rounded-lg hover:bg-cp-dark transition-colors disabled:opacity-50 flex items-center gap-2"
+                  onClick={() => handleDeleteCandidates(Array.from(selectedCandidates))}
+                  className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors flex items-center gap-2"
                 >
-                  {bulkUpdating ? (
-                    <>
-                      <span className="animate-spin inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full"></span>
-                      Updating...
-                    </>
-                  ) : (
-                    <>
-                      Change Status
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </>
-                  )}
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                  Delete
                 </button>
+                <div className="relative" ref={bulkDropdownRef}>
+                  <button
+                    onClick={() => setBulkStatusDropdownOpen(!bulkStatusDropdownOpen)}
+                    disabled={bulkUpdating}
+                    className="px-4 py-2 bg-cp-blue text-white rounded-lg hover:bg-cp-dark transition-colors disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {bulkUpdating ? (
+                      <>
+                        <span className="animate-spin inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full"></span>
+                        Updating...
+                      </>
+                    ) : (
+                      <>
+                        Change Status
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </>
+                    )}
+                  </button>
                 {bulkStatusDropdownOpen && availableStatuses.length > 0 && (
                   <div className="absolute right-0 z-20 mt-1 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-1 max-h-60 overflow-auto">
                     {availableStatuses.map((status) => (
@@ -800,6 +898,7 @@ export default function CandidatesDashboard() {
                     ))}
                   </div>
                 )}
+                </div>
               </div>
             </div>
           )}
@@ -937,19 +1036,68 @@ export default function CandidatesDashboard() {
                           <td className="py-4 px-6 text-cp-gray">{formatDate(candidate.appliedDate)}</td>
                           <td className="py-4 px-6 text-cp-gray">{candidate.source || '-'}</td>
                           <td className="py-4 px-6">
-                            <button
-                              onClick={() => fetchCandidateDetails(candidate.id)}
-                              disabled={loadingDetails === candidate.id}
-                              className="text-cp-blue hover:text-cp-dark text-sm disabled:opacity-50"
-                            >
-                              {loadingDetails === candidate.id ? (
-                                'Loading...'
-                              ) : expandedCandidate === candidate.id ? (
-                                'Hide Details'
-                              ) : (
-                                'View Details'
-                              )}
-                            </button>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => fetchCandidateDetails(candidate.id)}
+                                disabled={loadingDetails === candidate.id}
+                                className="text-cp-blue hover:text-cp-dark text-sm disabled:opacity-50"
+                              >
+                                {loadingDetails === candidate.id ? (
+                                  'Loading...'
+                                ) : expandedCandidate === candidate.id ? (
+                                  'Hide Details'
+                                ) : (
+                                  'View Details'
+                                )}
+                              </button>
+                              {/* Add to Pool Dropdown */}
+                              <div className="relative" ref={poolDropdownOpen === candidate.id ? poolDropdownRef : undefined}>
+                                <button
+                                  onClick={() => setPoolDropdownOpen(poolDropdownOpen === candidate.id ? null : candidate.id)}
+                                  disabled={addingToPool === candidate.id}
+                                  className="flex items-center gap-1 px-2 py-1 text-xs text-cp-gray hover:text-cp-blue hover:bg-cp-light rounded transition-colors disabled:opacity-50"
+                                  title="Add to Talent Pool"
+                                >
+                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                  </svg>
+                                  Pool
+                                </button>
+                                {poolDropdownOpen === candidate.id && talentPools.length > 0 && (
+                                  <div className="absolute right-0 z-20 mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 max-h-60 overflow-auto">
+                                    {talentPools.map((pool) => {
+                                      const isInPool = pool.candidateIds.includes(candidate.id);
+                                      return (
+                                        <button
+                                          key={pool.id}
+                                          onClick={() => !isInPool && addCandidateToPool(candidate.id, pool.id)}
+                                          disabled={isInPool || addingToPool === candidate.id}
+                                          className={`w-full text-left px-3 py-2 text-sm transition-colors flex items-center gap-2 ${
+                                            isInPool
+                                              ? 'bg-gray-50 text-cp-gray cursor-not-allowed'
+                                              : 'hover:bg-cp-light'
+                                          }`}
+                                        >
+                                          {isInPool ? (
+                                            <svg className="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                            </svg>
+                                          ) : (
+                                            <svg className="w-4 h-4 text-cp-gray" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                                            </svg>
+                                          )}
+                                          <span className="flex-1 truncate">{pool.name}</span>
+                                          {isInPool && (
+                                            <span className="text-xs text-green-600">Added</span>
+                                          )}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
                           </td>
                         </tr>
                         {/* Expanded details row */}
@@ -1018,6 +1166,12 @@ export default function CandidatesDashboard() {
                                       <a href={candidateDetails[candidate.id].linkedinUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-cp-blue hover:underline">View Profile</a>
                                     </div>
                                   )}
+                                  {candidateDetails[candidate.id].websiteUrl && (
+                                    <div className="bg-white rounded-lg p-3 shadow-sm">
+                                      <p className="text-xs text-cp-gray uppercase tracking-wide">Loom Video</p>
+                                      <a href={candidateDetails[candidate.id].websiteUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-cp-blue hover:underline">Watch Introduction</a>
+                                    </div>
+                                  )}
                                   {candidateDetails[candidate.id].availableStartDate && (
                                     <div className="bg-white rounded-lg p-3 shadow-sm">
                                       <p className="text-xs text-cp-gray uppercase tracking-wide">Available Start</p>
@@ -1051,15 +1205,28 @@ export default function CandidatesDashboard() {
                                 </div>
 
                                 {/* Documents (CV / Cover Letter) */}
-                                {(candidateDetails[candidate.id].resumeFileId || candidateDetails[candidate.id].coverLetterFileId) && (
+                                {(candidateDetails[candidate.id].resumeFileId || candidateDetails[candidate.id].resumeFilePath || candidateDetails[candidate.id].coverLetterFileId) && (
                                   <div>
                                     <p className="font-medium text-cp-dark text-sm mb-3">Documents:</p>
                                     <div className="flex gap-3">
-                                      {candidateDetails[candidate.id].resumeFileId && (
+                                      {candidateDetails[candidate.id].resumeFileId ? (
                                         <button
                                           onClick={() => openCvPopup(
                                             candidate.id,
-                                            candidateDetails[candidate.id].resumeFileId!,
+                                            candidate.displayName,
+                                            candidateDetails[candidate.id].resumeFileId!
+                                          )}
+                                          className="flex items-center gap-2 px-4 py-2 bg-cp-blue text-white rounded-lg hover:bg-cp-dark transition-colors"
+                                        >
+                                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                          </svg>
+                                          View CV (BambooHR)
+                                        </button>
+                                      ) : candidateDetails[candidate.id].hasResume ? (
+                                        <button
+                                          onClick={() => openCvPopup(
+                                            candidate.id,
                                             candidate.displayName
                                           )}
                                           className="flex items-center gap-2 px-4 py-2 bg-cp-blue text-white rounded-lg hover:bg-cp-dark transition-colors"
@@ -1069,13 +1236,13 @@ export default function CandidatesDashboard() {
                                           </svg>
                                           View CV
                                         </button>
-                                      )}
+                                      ) : null}
                                       {candidateDetails[candidate.id].coverLetterFileId && (
                                         <button
                                           onClick={() => openCvPopup(
                                             candidate.id,
-                                            candidateDetails[candidate.id].coverLetterFileId!,
-                                            `${candidate.displayName} - Cover Letter`
+                                            `${candidate.displayName} - Cover Letter`,
+                                            candidateDetails[candidate.id].coverLetterFileId!
                                           )}
                                           className="flex items-center gap-2 px-4 py-2 bg-white border border-cp-blue text-cp-blue rounded-lg hover:bg-cp-light transition-colors"
                                         >
@@ -1149,7 +1316,10 @@ export default function CandidatesDashboard() {
               </div>
               <div className="flex items-center gap-2">
                 <a
-                  href={`/api/candidates/${cvPopup.candidateId}/resume?fileId=${cvPopup.fileId}`}
+                  href={cvPopup.fileId
+                    ? `/api/candidates/${cvPopup.candidateId}/resume?fileId=${cvPopup.fileId}`
+                    : `/api/candidates/${cvPopup.candidateId}/resume`
+                  }
                   target="_blank"
                   rel="noopener noreferrer"
                   className="px-3 py-1.5 text-sm bg-cp-light text-cp-dark rounded-lg hover:bg-gray-200 transition-colors"
@@ -1170,7 +1340,10 @@ export default function CandidatesDashboard() {
             {/* Modal Content - PDF Viewer */}
             <div className="flex-1 overflow-hidden bg-gray-100">
               <iframe
-                src={`/api/candidates/${cvPopup.candidateId}/resume?fileId=${cvPopup.fileId}`}
+                src={cvPopup.fileId
+                  ? `/api/candidates/${cvPopup.candidateId}/resume?fileId=${cvPopup.fileId}`
+                  : `/api/candidates/${cvPopup.candidateId}/resume`
+                }
                 className="w-full h-full border-0"
                 title={`CV - ${cvPopup.candidateName}`}
               />
