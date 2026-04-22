@@ -496,13 +496,8 @@ export default function CandidatesDashboard() {
   const reRateCandidate = useCallback(async (candidateId: string) => {
     setReRatingCandidate(candidateId);
     try {
-      const response = await fetch(`/api/candidates/${candidateId}/ai-evaluation?force=true`);
-      if (response.ok) {
-        const evaluation = await response.json();
-        // Update the context with new evaluation - using the refresh method from context
-        // For now, just trigger a re-fetch of evaluations
-        await fetchAIEvaluation(candidateId);
-      }
+      // Use force=true to bypass cache and generate fresh evaluation
+      await fetchAIEvaluation(candidateId, true);
     } catch (err) {
       console.error('Error re-rating candidate:', err);
     } finally {
@@ -520,17 +515,14 @@ export default function CandidatesDashboard() {
     const candidateIds = Array.from(selectedCandidates);
 
     try {
-      // Process in batches to show progress
+      // Process candidates one at a time with progress
       for (let i = 0; i < candidateIds.length; i++) {
         const candidateId = candidateIds[i];
         setBulkRatingProgress({ current: i + 1, total: candidateIds.length });
 
         try {
-          const response = await fetch(`/api/candidates/${candidateId}/ai-evaluation?force=true`);
-          if (response.ok) {
-            // Refresh the evaluation in context
-            await fetchAIEvaluation(candidateId);
-          }
+          // Use force=true to bypass cache and generate fresh evaluation
+          await fetchAIEvaluation(candidateId, true);
         } catch (err) {
           console.error(`Error rating candidate ${candidateId}:`, err);
         }

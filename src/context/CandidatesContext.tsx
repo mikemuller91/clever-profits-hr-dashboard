@@ -23,7 +23,7 @@ interface CandidatesContextType {
   // Actions
   setCandidates: React.Dispatch<React.SetStateAction<Candidate[]>>;
   fetchCandidateDetails: (candidateId: string) => Promise<CandidateDetail | null>;
-  fetchAIEvaluation: (candidateId: string) => Promise<AIEvaluation | null>;
+  fetchAIEvaluation: (candidateId: string, force?: boolean) => Promise<AIEvaluation | null>;
   updateCandidateStatus: (candidateId: string, statusId: number, statusName: string) => Promise<boolean>;
   refresh: () => Promise<void>;
   ensureLoaded: () => Promise<void>;
@@ -141,9 +141,10 @@ export function CandidatesProvider({ children }: { children: ReactNode }) {
   }, [candidateDetails]);
 
   // Fetch AI evaluation (with caching and deduplication)
-  const fetchAIEvaluation = useCallback(async (candidateId: string): Promise<AIEvaluation | null> => {
-    // Return cached if available
-    if (aiEvaluations[candidateId]) {
+  // Set force=true to bypass cache and generate fresh evaluation
+  const fetchAIEvaluation = useCallback(async (candidateId: string, force: boolean = false): Promise<AIEvaluation | null> => {
+    // Return cached if available (unless force=true)
+    if (!force && aiEvaluations[candidateId]) {
       return aiEvaluations[candidateId];
     }
 
@@ -156,7 +157,10 @@ export function CandidatesProvider({ children }: { children: ReactNode }) {
     setAiEvaluationLoading(prev => ({ ...prev, [candidateId]: true }));
 
     try {
-      const response = await fetch(`/api/candidates/${candidateId}/ai-evaluation`);
+      const url = force
+        ? `/api/candidates/${candidateId}/ai-evaluation?force=true`
+        : `/api/candidates/${candidateId}/ai-evaluation`;
+      const response = await fetch(url);
 
       if (!response.ok) {
         const data = await response.json();
