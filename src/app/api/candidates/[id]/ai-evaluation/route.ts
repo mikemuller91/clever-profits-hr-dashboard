@@ -17,6 +17,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  const { searchParams } = new URL(request.url);
+  const force = searchParams.get('force') === 'true';
 
   if (!BAMBOO_API_KEY || !BAMBOO_SUBDOMAIN) {
     return NextResponse.json(
@@ -32,10 +34,12 @@ export async function GET(
     );
   }
 
-  // Check persistent cache first (Redis)
-  const cached = await getCachedEvaluation(id);
-  if (cached) {
-    return NextResponse.json(cached);
+  // Check persistent cache first (Redis) - skip if force=true
+  if (!force) {
+    const cached = await getCachedEvaluation(id);
+    if (cached) {
+      return NextResponse.json(cached);
+    }
   }
 
   try {
