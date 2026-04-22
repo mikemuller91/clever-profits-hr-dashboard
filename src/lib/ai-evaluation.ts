@@ -28,8 +28,47 @@ interface EvaluationInput {
   model?: string; // Optional: defaults to gemini-2.5-flash
 }
 
+// Explicit role-level mapping - prevents AI from guessing wrong
+type RoleLevel = 'Entry/Junior' | 'Intermediate' | 'Senior' | 'Manager' | 'Executive';
+
+function mapJobTitleToLevel(jobTitle: string): RoleLevel {
+  const title = jobTitle.toLowerCase();
+
+  // Entry/Junior keywords
+  if (title.includes('junior') || title.includes('trainee') || title.includes('intern') ||
+      title.includes('graduate') || title.includes('entry') || title.includes('assistant') ||
+      title.includes('clerk') || title.includes('bookkeeper') || title.includes('learner')) {
+    return 'Entry/Junior';
+  }
+
+  // Executive keywords
+  if (title.includes('cfo') || title.includes('chief') || title.includes('director') ||
+      title.includes('partner') || title.includes('head of') || title.includes('vp ') ||
+      title.includes('vice president')) {
+    return 'Executive';
+  }
+
+  // Manager keywords
+  if (title.includes('manager') || title.includes('lead') || title.includes('supervisor') ||
+      title.includes('team lead')) {
+    return 'Manager';
+  }
+
+  // Senior keywords
+  if (title.includes('senior') || title.includes('snr') || title.includes('sr ') ||
+      title.includes('principal')) {
+    return 'Senior';
+  }
+
+  // Default to Intermediate for standard titles like "Accountant", "Management Accountant"
+  return 'Intermediate';
+}
+
 export async function evaluateCandidate(input: EvaluationInput): Promise<AIEvaluation> {
   const { jobTitle, resumeText, questionsAndAnswers, candidateName, model = 'gemini-2.5-flash' } = input;
+
+  // Explicitly determine role level - don't let AI guess
+  const roleLevel = mapJobTitleToLevel(jobTitle);
 
   // Format Q&A for the prompt
   const qaText = questionsAndAnswers.length > 0
@@ -39,23 +78,32 @@ export async function evaluateCandidate(input: EvaluationInput): Promise<AIEvalu
   const prompt = `You are an AI candidate rating model for an outsourced accounting firm that delivers fractional CFO services. Your job is to evaluate a candidate against (1) our internal rubric and (2) an industry-norms sanity check so scores don't inflate. Return STRICT JSON only.
 
 INPUTS YOU MAY RECEIVE (not always complete):
-- Target role / level (if provided): Intern/Junior, Intermediate, Senior, Manager, Executive
+- Target role / level (EXPLICITLY PROVIDED - use this, do not override)
 - Resume/CV text, LinkedIn summary, application answers
 - Education (degree type, field, institution, graduation year, grades if present)
 - Work history (titles, companies, tenure, responsibilities, achievements)
 - Certifications/designations and tools
 
 CORE DEFINITION: WHAT "PRIME CANDIDATE" MEANS
-A prime candidate has ALL THREE:
+This varies by role level:
+
+FOR ENTRY/JUNIOR ROLES - A prime candidate has:
+1) Strong academic record + relevant qualifications (THIS IS THE PRIMARY FACTOR - 60% weight)
+2) Any accounting exposure is a bonus (internships, articles, projects, bookkeeping)
+3) Clear communication, eagerness to learn, relevant field of study
+Note: Lack of work experience should NOT penalize Entry/Junior candidates. Education is the primary indicator.
+
+FOR INTERMEDIATE+ ROLES - A prime candidate has ALL THREE:
 1) Sufficient experience in a similar role (relevant, recent, demonstrable responsibilities)
 2) Great academic record + strong qualifications (right level + credible institution)
-3) A well-rounded CV (clear progression, stable tenure, strong tools exposure, evidence of impact, communication/client-facing signals)
-Missing any one area should meaningfully reduce the score.
+3) A well-rounded CV (clear progression, stable tenure, strong tools exposure, evidence of impact)
 
-STEP 1 — CLASSIFY ROLE LEVEL (if not explicitly provided)
-Infer using titles + years + scope:
-- Entry / Junior: 0–3 years
-- Intermediate: 3–5 years
+STEP 1 — ROLE LEVEL (EXPLICITLY PROVIDED - DO NOT CHANGE)
+The role level has been determined by the system. Use exactly: ${roleLevel}
+
+Role level definitions for context:
+- Entry/Junior: 0–3 years expected, education is primary differentiator
+- Intermediate: 3–5 years expected, balance of education and experience
 - Senior: 5–8 years (independent ownership expected)
 - Manager: 8–12 years (review/leadership expected)
 - Executive: 12+ years (leadership + advisory ownership expected)
@@ -121,78 +169,103 @@ Weights:
 
 RAW_SCORE = weighted average of the three sub-scores, then round to nearest integer (1–10).
 
-STEP 3 — INDUSTRY-NORMS SANITY CHECK (ANTI-INFLATION) — REQUIRED
-Apply this second check so scores align with realistic market norms for outsourced accounting/fractional finance roles. If uncertain between two scores, choose the LOWER score.
+STEP 3 — INDUSTRY-NORMS SANITY CHECK (ROLE-SENSITIVE) — REQUIRED
+Apply this check so scores align with realistic market norms. IMPORTANT: Caps are different by role level.
 
-3A) Role-specific must-haves (missing must-haves triggers caps)
-Entry/Junior MUST-HAVES:
+3A) Role-specific must-haves and caps
+
+=== ENTRY/JUNIOR SPECIFIC RULES (EDUCATION-FOCUSED) ===
+For Entry/Junior roles, experience-based caps DO NOT APPLY. Education is the primary differentiator.
+
+Entry/Junior MUST-HAVES (only education-focused):
 - Accounting/finance degree (or in-progress) AND field relevance is clear
-- Institution is stated (or credible evidence) OR strong academic evidence exists
-- At least one proof point of accounting exposure (internship/articles/bookkeeping/projects) OR exceptionally strong academics at Tier A/B
+- Institution is stated OR credible evidence exists
 
+Entry/Junior SCORING:
+- Strong education (Honours/Bachelor from Tier A/B + good academics) → can score 8-9 even with NO work experience
+- Relevant degree + Tier A/B institution → can score 7-8 with minimal experience
+- Relevant degree + any institution + internship/articles → can score 7-8
+- Missing degree relevance OR very weak institution → cap at 6
+- No relevant qualification → cap at 5
+
+Entry/Junior BOOSTERS (can push score higher):
+- CA/CPA articles or Big 4 internship → +1
+- Honours degree with distinctions → +1
+- Tier A institution (UCT, Wits, Stellenbosch, UP, UKZN, Rhodes) → +1
+- Strong academic performance evidence → +1
+
+=== INTERMEDIATE RULES ===
 Intermediate MUST-HAVES:
 - 3+ years relevant accounting (or close with strong evidence)
 - Core month-end/recon/reporting exposure
-- Tools: Excel/Sheets + at least one accounting system (QBO/Xero/ERP)
+- Tools: Excel/Sheets + at least one accounting system
 
+Intermediate caps:
+- Missing 1 must-have → cap at 7
+- Missing 2+ must-haves → cap at 6
+
+=== SENIOR+ RULES ===
 Senior MUST-HAVES:
-- Ownership of month-end close and reporting packs (clear accountability)
+- Ownership of month-end close and reporting packs
 - Client/stakeholder communication evidence
-- Strong tools: QBO/Xero + Excel/Sheets (or equivalent)
+- Strong tools: QBO/Xero + Excel/Sheets
 
 Manager MUST-HAVES:
-- Review/sign-off responsibility (work review, QA, final checks)
-- Leadership (mentoring/training/resource planning) OR delivery management
-- Advisory output (forecasting/cash flow/KPIs) evidence
+- Review/sign-off responsibility
+- Leadership evidence
+- Advisory output evidence
 
 Executive MUST-HAVES:
-- Leadership track record (teams, strategy, accountability)
-- Advisory/client ownership (recommendations, influencing decisions)
-- High-level finance ownership (forecasting, cash, KPIs, board/executive reporting)
+- Leadership track record
+- Advisory/client ownership
+- High-level finance ownership
 
-Must-have cap rule:
-- If missing 1 must-have → cap FINAL_SCORE at 7 (unless overwhelming evidence elsewhere)
-- If missing 2+ must-haves → cap FINAL_SCORE at 6
-- If missing 3+ must-haves → FINAL_SCORE typically 1–5 depending on relevance
+Senior+ caps:
+- Missing 1 must-have → cap at 7
+- Missing 2+ must-haves → cap at 6
+- Lacks expected years/scope → cap at 6
 
-3B) Score bands (default ceilings unless clearly exceeded with evidence)
-- Entry/Junior: 8–9 requires strong degree (Bachelor/Honours+) + Tier A/B + strong academics OR standout practical proof; 10 almost never
-- Intermediate: 8–9 requires 3–5 years clearly relevant + delivery evidence + good education
-- Senior+: 8–9 requires clear ownership + strong relevance + strong delivery evidence; 10 only for rare "exceeds across all pillars" candidates
+3B) Score bands by role level
+- Entry/Junior: 8-10 achievable with strong education alone; 10 for Honours/CPA-track + Tier A + distinctions
+- Intermediate: 8-9 requires 3-5 years + delivery evidence + good education
+- Senior+: 8-9 requires clear ownership + strong relevance; 10 for exceptional all-round
 
-3C) Gate-and-cap rules (apply in order)
-GATE 1 — Experience gate:
-- If Senior+ and candidate lacks expected years/scope → cap at 6
-- If Intermediate and lacks 3+ relevant years → cap at 6 (exception: exceptional education + strong practical evidence → cap at 7)
+3C) Gate rules (apply ONLY to Intermediate and above, NOT to Entry/Junior)
+GATE 1 — Experience gate (Intermediate+ only):
+- If Senior+ and lacks expected years → cap at 6
+- If Intermediate and lacks 3+ years → cap at 6 (exception: exceptional education → cap at 7)
 
-GATE 2 — Prime Candidate completeness gate:
-Check pillars:
-A) sufficient similar experience
-B) strong academics/qualifications
-C) well-rounded CV
-If missing 1 pillar → reduce FINAL_SCORE by 1–2
-If missing 2 pillars → reduce by 3–4
-If missing all 3 → FINAL_SCORE should be 1–3
+GATE 2 — For Intermediate+ only, check pillars:
+A) sufficient experience B) strong academics C) well-rounded CV
+Missing 1 pillar → reduce by 1-2; Missing 2 → reduce by 3-4
 
-GATE 3 — Education inflation control (esp. PGDip + limited experience):
-- PGDip + <2 years relevant + no strong institution/academics proof → cap at 6
-- PGDip + Tier A/B + strong academics + internships/projects → may reach 7–8 (8 only if exceptionally strong overall)
+NOTE: For Entry/Junior, ONLY education pillar matters for gating. Experience and well-rounded CV are BONUSES, not requirements.
 
-GATE 4 — 10/10 rule:
-- 10/10 is reserved for candidates who materially exceed expectations across ALL weighted dimensions AND pass sanity check.
-- If any major gap exists (education weak OR experience weak OR CV not well-rounded), FINAL_SCORE cannot be 10.
+3D) 10/10 rule:
+- Entry/Junior: 10 is achievable for Honours/CPA-track + Tier A institution + distinctions + any practical exposure
+- Intermediate+: 10 requires exceeding ALL pillars with strong evidence
 
-3D) Rating scale calibration (for decision usefulness)
+3E) Rating scale calibration (for decision usefulness)
 Interpret scores as:
-- 1–4: reject / clearly weak fit
-- 5–6: borderline / hold
-- 7: shortlist
-- 8–9: priority interview (top-tier for role)
-- 10: unicorn (rare; only with exceptional evidence)
+- 1-3: reject / clearly unqualified
+- 4-5: weak fit / significant gaps
+- 6: borderline / maybe with reservations
+- 7: solid candidate / shortlist
+- 8: strong candidate / priority interview
+- 9: excellent candidate / top tier
+- 10: exceptional / hire immediately
 
-3E) Final score selection
-Start with RAW_SCORE, apply caps from missing info + must-haves + gates, then apply pillar reductions.
-Keep FINAL_SCORE conservative when uncertain. Do not over-reward credentials without evidence of capability for the level.
+IMPORTANT: Aim for a SPREAD of scores. Not everyone should cluster at 5-7.
+- Truly weak candidates (wrong field, no relevant quals) should score 1-4
+- Average candidates score 5-6
+- Good candidates score 7-8
+- Great candidates score 9-10
+
+3F) Final score selection
+For Entry/Junior: Start with education score as the base, apply boosters, then only apply education-related caps.
+For Intermediate+: Start with RAW_SCORE, apply experience-based caps, then pillar reductions.
+
+Be willing to give LOW scores (1-4) for genuinely weak candidates and HIGH scores (8-10) for strong ones.
 
 STEP 4 — OUTPUT RULES (STRICT)
 - Prefer evidence over assumptions; missing info should not score highly.
